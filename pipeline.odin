@@ -181,6 +181,23 @@ init_pipeline :: proc() -> bool {
 	defer wgpu.PipelineLayoutRelease(drawing_pipeline_layout)
 
 	// ==========================================================================
+	// Create Clear Pipeline (uses same layout as drawing)
+	// ==========================================================================
+	clear_desc := wgpu.ComputePipelineDescriptor {
+		label = "Clear Compute Pipeline",
+		layout = drawing_pipeline_layout,
+		compute = {module = drawing_shader, entryPoint = "cs_clear"},
+	}
+	state.pipelines.clear_pipeline = wgpu.DeviceCreateComputePipeline(
+		state.gapi.device,
+		&clear_desc,
+	)
+	if state.pipelines.clear_pipeline == nil {
+		log_err("Failed to create clear pipeline")
+		return false
+	}
+
+	// ==========================================================================
 	// Create Drawing Pipeline
 	// ==========================================================================
 	drawing_desc := wgpu.ComputePipelineDescriptor {
@@ -390,6 +407,7 @@ cleanup_pipelines :: proc() {
 	if present_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(present_bind_group_layout)
 	if state.pipelines.drawing_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.drawing_bind_group)
 	if state.pipelines.drawing_pipeline != nil do wgpu.ComputePipelineRelease(state.pipelines.drawing_pipeline)
+	if state.pipelines.clear_pipeline != nil do wgpu.ComputePipelineRelease(state.pipelines.clear_pipeline)
 	if drawing_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(drawing_bind_group_layout)
 	if state.pipelines.rasterize_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.rasterize_bind_group)
 	if state.pipelines.rasterize_pipeline != nil do wgpu.RenderPipelineRelease(state.pipelines.rasterize_pipeline)

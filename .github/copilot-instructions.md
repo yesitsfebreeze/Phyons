@@ -4,12 +4,43 @@
 
 **Odin-language** WebGPU renderer for "volume-aware" mesh rendering. Stores interior + surface positions per vertex to enable SDF-like thickness estimation without ray marching.
 
+## Core Rendering Technique (IMPORTANT)
+
+The key innovation is **reprojection-based smooth surface rendering**:
+
+1. **Rasterize Pass**: Rasterize the SURFACE triangles (position + normal * depth). This gives correct depth sorting and visibility. The inside positions are collapsed near center so we MUST use surface. Output `face_id` per pixel.
+
+2. **Drawing Pass** (compute shader):
+   - For each pixel with a face_id, fetch the 3 phyons of that triangle
+   - Each phyon stores: `inside` (centroid position), `normal` (surface direction), `depth` (distance to surface)
+   - Cast a ray through the pixel, intersect with the SURFACE triangle plane
+   - Compute barycentric coordinates at the intersection
+   - **Interpolate** the phyon attributes: `inside`, `normal`, `depth`
+   - **Reconstruct surface**: `outside = inside + normal * depth` (using INTERPOLATED values)
+   - **Reproject** `outside` to screen space → this is the OUTPUT pixel
+   - Write color + depth to the reprojected pixel (with atomic depth test)
+
+This technique produces **smooth, SDF-like surfaces** because:
+- Rasterization uses flat surface triangles for visibility/depth sorting only
+- The INTERPOLATED normal creates smooth curvature across the triangle
+- Reconstructing `outside = inside + interpolated_normal * interpolated_depth` gives a smoothly curved point
+- A sphere made of triangles renders as a perfect smooth sphere
+
+### Coordinate Space Flow
+- Phyon data (position, normal, depth) are in **MODEL space**
+- Transform triangle vertices to **WORLD space** for ray intersection
+- Compute barycentrics in **WORLD space**
+- Interpolate phyon attributes in **MODEL space** using those barycentrics
+- Reconstruct `outside` in **MODEL space**, then transform to **WORLD space**
+- Project to **SCREEN space** for final output
+
 ## Architecture
 
 ### Three-Pass Rendering Pipeline
-1. **Rasterize** (`rasterize.vs/fs.wgsl`): Outputs `face_id` + barycentric coords to `RGBA32Float` texture
-2. **Drawing** (`drawing.cs.wgsl`): Compute shader reads face data, interpolates phyon attributes, computes lighting
-3. **Present** (`present.vs/fs.wgsl`): Full-screen quad renders output texture to screen
+1. **Rasterize** (`rasterize.vs/fs.wgsl`): Outputs `face_id` to `RGBA32Float` texture
+2. **Clear** (`drawing.cs.wgsl` - `cs_clear`): Clears depth buffer and output texture on GPU
+3. **Drawing** (`drawing.cs.wgsl` - `cs_main`): Compute shader reads face data, interpolates phyon attributes, reprojects surface, writes with depth test
+4. **Present** (`present.vs/fs.wgsl`): Full-screen quad renders output texture to screen
 
 ### Key Files
 | File | Purpose |

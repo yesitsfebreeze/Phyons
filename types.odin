@@ -47,6 +47,8 @@ PipelinesState :: struct {
 	// Render pipeline (rasterization pass - writes face IDs)
 	rasterize_pipeline:   wgpu.RenderPipeline,
 	rasterize_bind_group: wgpu.BindGroup,
+	// Clear pipeline (clears depth buffer and output texture)
+	clear_pipeline:       wgpu.ComputePipeline,
 	// Drawing pipeline (processes face IDs into final images)
 	drawing_pipeline:     wgpu.ComputePipeline,
 	drawing_bind_group:   wgpu.BindGroup,

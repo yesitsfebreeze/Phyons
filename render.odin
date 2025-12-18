@@ -238,12 +238,29 @@ render_frame :: proc() {
 	}
 
 	// ==========================================================================
-	// Pass 2: Drawing Pass - Process face IDs into image
+	// Pass 2a: Clear Pass - Clear depth buffer and output texture on GPU
 	// ==========================================================================
 	{
-		// Clear  depth buffer to max depth (must be done before compute pass)
-		clear_depth_buffer()
+		pass := wgpu.CommandEncoderBeginComputePass(encoder, nil)
 
+		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.clear_pipeline)
+		wgpu.ComputePassEncoderSetBindGroup(pass, 0, state.pipelines.drawing_bind_group)
+
+		// Dispatch workgroups (8x8 threads per group)
+		width := state.gapi.surface_config.width
+		height := state.gapi.surface_config.height
+		workgroups_x := (width + 7) / 8
+		workgroups_y := (height + 7) / 8
+		wgpu.ComputePassEncoderDispatchWorkgroups(pass, workgroups_x, workgroups_y, 1)
+
+		wgpu.ComputePassEncoderEnd(pass)
+		wgpu.ComputePassEncoderRelease(pass)
+	}
+
+	// ==========================================================================
+	// Pass 2b: Drawing Pass - Process face IDs into image
+	// ==========================================================================
+	{
 		pass := wgpu.CommandEncoderBeginComputePass(encoder, nil)
 
 		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.drawing_pipeline)

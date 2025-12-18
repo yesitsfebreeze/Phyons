@@ -47,6 +47,24 @@ var output_texture: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(5)
 var<storage, read_write> depth_buffer: array<atomic<u32>>;
 
+// Clear entry point - clears both depth buffer and output texture
+@compute @workgroup_size(8, 8, 1)
+fn cs_clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
+	let pixel = vec2<i32>(global_id.xy);
+	let dims = vec2<i32>(i32(uniforms.screen_width), i32(uniforms.screen_height));
+
+	if (pixel.x >= dims.x || pixel.y >= dims.y) {
+		return;
+	}
+
+	// Clear depth buffer to max depth (farthest)
+	let idx = pixel_to_index(pixel, dims.x);
+	atomicStore(&depth_buffer[idx], 0xFFFFFFFFu);
+
+	// Clear output texture to black
+	textureStore(output_texture, pixel, vec4<f32>(0.0, 0.0, 0.0, 0.0));
+}
+
 // Get linear index for depth buffer
 fn pixel_to_index(pixel: vec2<i32>, width: i32) -> u32 {
 	return u32(pixel.y * width + pixel.x);
@@ -110,13 +128,22 @@ fn compute_barycentric(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, c: vec3<f32>) -
 }
 
 // Get surface position from phyon (centroid + normal * depth) - in MODEL space
-fn get_surface_pos(p: Phyon) -> vec3<f32> {
+fn get_surface_pos_model(p: Phyon) -> vec3<f32> {
 	return p.position + p.normal * p.depth;
 }
 
 // Transform model space point to world space
-fn to_world(point: vec3<f32>) -> vec3<f32> {
+fn model_to_world(point: vec3<f32>) -> vec3<f32> {
 	return (uniforms.model * vec4<f32>(point, 1.0)).xyz;
+}
+
+// Transform model space normal to world space (using transpose of inverse for correct normal transform)
+// For uniform scaling, this simplifies to just applying the model matrix's rotation
+fn normal_to_world(n: vec3<f32>) -> vec3<f32> {
+	// Extract the 3x3 rotation/scale part of model matrix
+	// For correct normal transformation with non-uniform scale, we'd need inverse transpose
+	// For now assuming uniform scale or no scale
+	return normalize((uniforms.model * vec4<f32>(n, 0.0)).xyz);
 }
 
 // Get the 3 phyons for a face using the index buffer
@@ -128,6 +155,7 @@ fn get_face_phyons(face_id: u32) -> array<Phyon, 3> {
 }
 
 // Interpolate phyon from face ID using ray reconstruction
+// Returns Surface with all positions in WORLD space
 fn interp_phyon_from_face(pixel: vec2<i32>, face_id: u32) -> Surface {
 	let tri = get_face_phyons(face_id);
 	let p0 = tri[0];
@@ -135,14 +163,14 @@ fn interp_phyon_from_face(pixel: vec2<i32>, face_id: u32) -> Surface {
 	let p2 = tri[2];
 
 	// Get surface positions in MODEL space
-	let a_model = get_surface_pos(p0);
-	let b_model = get_surface_pos(p1);
-	let c_model = get_surface_pos(p2);
+	let a_model = get_surface_pos_model(p0);
+	let b_model = get_surface_pos_model(p1);
+	let c_model = get_surface_pos_model(p2);
 
 	// Transform to WORLD space for ray intersection
-	let a = to_world(a_model);
-	let b = to_world(b_model);
-	let c = to_world(c_model);
+	let a = model_to_world(a_model);
+	let b = model_to_world(b_model);
+	let c = model_to_world(c_model);
 
 	// Compute triangle normal in world space
 	let tri_normal = normalize(cross(b - a, c - a));
@@ -161,22 +189,18 @@ fn interp_phyon_from_face(pixel: vec2<i32>, face_id: u32) -> Surface {
 	let normal = normalize(p0.normal * bary.x + p1.normal * bary.y + p2.normal * bary.z);
 	let depth = p0.depth * bary.x + p1.depth * bary.y + p2.depth * bary.z;
 	let outside = inside + normal * depth;
-	var result: Surface;
-	result.inside = inside;
-	result.outside = outside;
-	result.normal = normal;
-	result.depth = depth;
 
-	// result.position =;
-	// result.normal = normalize(p0.normal * bary.x + p1.normal * bary.y + p2.normal * bary.z);
-	// result.depth = p0.depth * bary.x + p1.depth * bary.y + p2.depth * bary.z;
+	var result: Surface;
+	result.inside = model_to_world(inside);
+	result.outside = model_to_world(outside);
+	result.normal = normal_to_world(normal);
+	result.depth = depth;
 
 	return result;
 }
 
-fn to_screen(point: vec3<f32>) -> vec2<i32> {
-	// point is in MODEL space, transform to world then to clip
-	let world_pos = (uniforms.model * vec4<f32>(point, 1.0)).xyz;
+// Convert WORLD space point to screen pixel coordinates
+fn world_to_screen(world_pos: vec3<f32>) -> vec2<i32> {
 	let clip_pos = uniforms.view_proj * vec4<f32>(world_pos, 1.0);
 	let ndc_pos = clip_pos.xyz / clip_pos.w;
 
@@ -187,9 +211,8 @@ fn to_screen(point: vec3<f32>) -> vec2<i32> {
 	return vec2<i32>(i32(screen_x), i32(screen_y));
 }
 
-// Get NDC depth for a world position (0 = near, 1 = far)
-fn get_ndc_depth(point: vec3<f32>) -> f32 {
-	let world_pos = (uniforms.model * vec4<f32>(point, 1.0)).xyz;
+// Get NDC depth for a WORLD space position (0 = near, 1 = far)
+fn get_ndc_depth_world(world_pos: vec3<f32>) -> f32 {
 	let clip_pos = uniforms.view_proj * vec4<f32>(world_pos, 1.0);
 	return (clip_pos.z / clip_pos.w) * 0.5 + 0.5;
 }
@@ -215,22 +238,23 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	let face_id = u32(round(data.a * uniforms.face_count));
 	let surface = interp_phyon_from_face(pixel, face_id);
 
-	let out_pixel = to_screen(surface.outside);
+	// Reproject the reconstructed surface position to screen
+	let out_pixel = world_to_screen(surface.outside);
 
 	// Bounds check for output pixel
 	if (out_pixel.x < 0 || out_pixel.x >= dims.x || out_pixel.y < 0 || out_pixel.y >= dims.y) {
 		return;
 	}
 
-	// Compute depth at the surface position
-	let ndc_depth = get_ndc_depth(surface.outside);
+	// Compute depth at the reconstructed surface position (world space)
+	let ndc_depth = get_ndc_depth_world(surface.outside);
 
 	// Atomic depth test - only write if we're closer
 	if (!depth_test(out_pixel, ndc_depth, dims.x)) {
 		return;
 	}
 
-	// Simple lighting
+	// Simple lighting in WORLD space
 	let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
 	let ndotl = max(dot(surface.normal, light_dir), 0.0);
 	let ambient = 0.2;
