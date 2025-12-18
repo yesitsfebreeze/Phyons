@@ -1,6 +1,35 @@
 package phyons
 
 
+// A Shape is a reusable geometry definition (vertices + indices)
+Shape :: struct {
+	phyons:            []Phyon,
+	triangle_indices:  []u32, // Triangle indices for geometry pass
+	wireframe_indices: []u16, // Edge indices for wireframe pass
+}
+
+// A Volume is an instance of a shape in the world
+Volume :: struct {
+	shape_id:  ShapeId,
+	transform: mat4,
+	color:     vec3,
+	opacity:   f32,
+	visible:   bool,
+}
+
+ShapeId :: distinct u32
+VolumeId :: distinct u32
+
+INVALID_SHAPE_ID :: ShapeId(max(u32))
+INVALID_VOLUME_ID :: VolumeId(max(u32))
+
+VolumeManagerState :: struct {
+	shapes:  [dynamic]Shape,
+	volumes: [dynamic]Volume,
+	dirty:   bool, // True if buffers need rebuild
+}
+
+
 // Initialize the volume manager
 init_volume_manager :: proc() {
 	state.volume_manager.shapes = make([dynamic]Shape)
@@ -314,4 +343,15 @@ cleanup_volume_manager :: proc() {
 	}
 	delete(state.volume_manager.shapes)
 	delete(state.volume_manager.volumes)
+}
+
+
+translate_volume :: proc(volume_id: VolumeId, translation: vec3) {
+	vol := get_volume(volume_id)
+	if vol == nil {
+		return
+	}
+	translation_matrix := mat4_translate(translation)
+	vol.transform = translation_matrix * vol.transform
+	state.volume_manager.dirty = true
 }

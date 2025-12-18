@@ -5,6 +5,17 @@ import "core:path/filepath"
 import "vendor/tinyobj"
 
 
+Phyon :: struct {
+	position:           vec3,
+	color:              vec3,
+	reference_centroid: vec3,
+	normal:             vec3,
+	material_id:        f32, // Using f32 for alignment, will be cast to u32 in shader
+	opacity:            f32,
+	distance_to_center: f32,
+	_pad:               f32, // Padding to 64 bytes
+}
+
 // Load a shape from an OBJ file using tinyobj
 // Returns INVALID_SHAPE_ID on failure
 load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
