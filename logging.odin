@@ -76,11 +76,7 @@ init_logging :: proc() {
 	console_logger = log.create_console_logger()
 
 	// Create file logger
-	log_file_handle, _ = os.open(
-		LOG_FILE_PATH,
-		os.O_WRONLY | os.O_CREATE | os.O_TRUNC,
-		0o644,
-	)
+	log_file_handle, _ = os.open(LOG_FILE_PATH, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644)
 	if log_file_handle != os.INVALID_HANDLE {
 		file_logger = log.create_file_logger(log_file_handle)
 		// Create multi-logger combining both
