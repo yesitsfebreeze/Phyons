@@ -15,10 +15,7 @@ init_buffers :: proc() -> bool {
 		usage            = {.Uniform, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.uniform_buffer = wgpu.DeviceCreateBuffer(
-		state.gapi.device,
-		&uniform_buffer_desc,
-	)
+	state.buffers.uniform_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &uniform_buffer_desc)
 	if state.buffers.uniform_buffer == nil {
 		fmt.println("Failed to create uniform buffer")
 		return false
@@ -39,10 +36,7 @@ create_vertex_buffer :: proc(vertices: []Vertex) -> bool {
 		usage            = {.Vertex, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.vertex_buffer = wgpu.DeviceCreateBuffer(
-		state.gapi.device,
-		&vertex_buffer_desc,
-	)
+	state.buffers.vertex_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
 	if state.buffers.vertex_buffer == nil {
 		fmt.println("Failed to create vertex buffer")
 		return false
@@ -71,10 +65,7 @@ create_index_buffer :: proc(indices: []u16) -> bool {
 		usage            = {.Index, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.index_buffer = wgpu.DeviceCreateBuffer(
-		state.gapi.device,
-		&index_buffer_desc,
-	)
+	state.buffers.index_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &index_buffer_desc)
 	if state.buffers.index_buffer == nil {
 		fmt.println("Failed to create index buffer")
 		return false

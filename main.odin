@@ -41,6 +41,9 @@ init :: proc() -> bool {
 	init_camera()
 	init_volume_manager()
 
+	// Initialize scene (creates shapes and volumes)
+	scene_init()
+
 	if !init_buffers() {
 		log_err("Failed to initialize buffers")
 		return false

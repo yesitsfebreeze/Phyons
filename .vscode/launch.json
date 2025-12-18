@@ -9,7 +9,7 @@
 			"type": "lldb",
 			"request": "launch",
 			"preLaunchTask": "build",
-			"program": "${workspaceRoot}/phyons.exe",
+			"program": "${workspaceRoot}/bin/phyons.exe",
 			"args": [],
 			"cwd": "${workspaceRoot}"
 		}
