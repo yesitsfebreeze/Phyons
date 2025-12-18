@@ -7,10 +7,10 @@ import "vendor/tinyobj"
 
 // GPU vertex structure - 32 bytes aligned
 Phyon :: struct {
-	position: vec3,        // Interior/centroid position (12 bytes)
-	depth:    f32,         // Distance to surface (4 bytes)
-	normal:   vec3,        // Surface normal (12 bytes)
-	opacity:  f32,         // Opacity (4 bytes)
+	position: vec3, // Interior/centroid position (12 bytes)
+	depth:    f32, // Distance to surface (4 bytes)
+	normal:   vec3, // Surface normal (12 bytes)
+	opacity:  f32, // Opacity (4 bytes)
 }
 
 // Assets directory relative to working directory (project root when using odin run .)
@@ -112,14 +112,7 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 
 	num_tris := len(indices) / 3
-	log_info(
-		"Loaded OBJ:",
-		filename,
-		"- vertices:",
-		num_verts,
-		"faces:",
-		num_tris,
-	)
+	log_info("Loaded OBJ:", filename, "- vertices:", num_verts, "faces:", num_tris)
 
 	free_all(context.temp_allocator)
 	return make_shape(vertices, indices[:])

@@ -246,9 +246,7 @@ rebuild_volume_buffers :: proc() -> bool {
 			)
 
 			// Scale depth by transform scale
-			scale := length(
-				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
-			)
+			scale := length(vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z})
 			new_vert.depth = v.depth * scale
 			new_vert.opacity = v.opacity
 

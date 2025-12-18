@@ -30,20 +30,20 @@ BuffersState :: struct {
 
 RenderingState :: struct {
 	// Hardware depth texture (z-buffer for rasterize pass)
-	depth_texture:           wgpu.Texture,
-	depth_texture_view:      wgpu.TextureView,
+	depth_texture:                wgpu.Texture,
+	depth_texture_view:           wgpu.TextureView,
 	// Inside+depth texture (xyz=inside position, w=phyon depth)
-	inside_depth_texture:      wgpu.Texture,
-	inside_depth_texture_view: wgpu.TextureView,
+	inside_depth_texture:         wgpu.Texture,
+	inside_depth_texture_view:    wgpu.TextureView,
 	// Normal+material texture (xyz=normal, w=material_id)
 	normal_material_texture:      wgpu.Texture,
 	normal_material_texture_view: wgpu.TextureView,
 	// Output texture (final image from compute pass)
-	output_texture:          wgpu.Texture,
-	output_texture_view:     wgpu.TextureView,
+	output_texture:               wgpu.Texture,
+	output_texture_view:          wgpu.TextureView,
 	// Dimensions
-	depth_width:             u32,
-	depth_height:            u32,
+	depth_width:                  u32,
+	depth_height:                 u32,
 }
 
 PipelinesState :: struct {

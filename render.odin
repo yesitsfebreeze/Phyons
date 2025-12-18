@@ -65,7 +65,10 @@ ensure_render_textures :: proc() -> (bool, bool) {
 		format        = .RGBA32Float,
 		usage         = {.RenderAttachment, .TextureBinding},
 	}
-	state.rendering.inside_depth_texture = wgpu.DeviceCreateTexture(state.gapi.device, &inside_depth_desc)
+	state.rendering.inside_depth_texture = wgpu.DeviceCreateTexture(
+		state.gapi.device,
+		&inside_depth_desc,
+	)
 	if state.rendering.inside_depth_texture == nil {
 		log_err("Failed to create inside_depth texture")
 		return false, false
@@ -92,7 +95,10 @@ ensure_render_textures :: proc() -> (bool, bool) {
 		format        = .RGBA32Float,
 		usage         = {.RenderAttachment, .TextureBinding},
 	}
-	state.rendering.normal_material_texture = wgpu.DeviceCreateTexture(state.gapi.device, &normal_material_desc)
+	state.rendering.normal_material_texture = wgpu.DeviceCreateTexture(
+		state.gapi.device,
+		&normal_material_desc,
+	)
 	if state.rendering.normal_material_texture == nil {
 		log_err("Failed to create normal_material texture")
 		return false, false
@@ -170,7 +176,7 @@ render_frame :: proc() {
 		log_err("Failed to ensure render textures")
 		return
 	}
-	
+
 	// Recreate bind groups if textures changed
 	if textures_changed {
 		recreate_drawing_bind_group()

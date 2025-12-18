@@ -188,8 +188,8 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	clear_desc := wgpu.ComputePipelineDescriptor {
-		label   = "Clear Compute Pipeline",
-		layout  = drawing_pipeline_layout,
+		label = "Clear Compute Pipeline",
+		layout = drawing_pipeline_layout,
 		compute = {module = drawing_shader, entryPoint = "cs_clear"},
 	}
 	state.pipelines.clear_pipeline = wgpu.DeviceCreateComputePipeline(
@@ -206,8 +206,8 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	drawing_desc := wgpu.ComputePipelineDescriptor {
-		label   = "Drawing Compute Pipeline",
-		layout  = drawing_pipeline_layout,
+		label = "Drawing Compute Pipeline",
+		layout = drawing_pipeline_layout,
 		compute = {module = drawing_shader, entryPoint = "cs_main"},
 	}
 	state.pipelines.drawing_pipeline = wgpu.DeviceCreateComputePipeline(
@@ -275,10 +275,10 @@ init_pipeline :: proc() -> bool {
 	}
 
 	present_pipeline_desc := wgpu.RenderPipelineDescriptor {
-		label     = "Present Pipeline",
-		layout    = present_pipeline_layout,
-		vertex    = {module = present_vertex_shader, entryPoint = "vs_main"},
-		fragment  = &present_fragment,
+		label = "Present Pipeline",
+		layout = present_pipeline_layout,
+		vertex = {module = present_vertex_shader, entryPoint = "vs_main"},
+		fragment = &present_fragment,
 		primitive = {topology = .TriangleList},
 		multisample = {count = 1, mask = ~u32(0)},
 	}
