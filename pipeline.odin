@@ -75,6 +75,7 @@ init_pipeline :: proc() -> bool {
 		{format = .Float32x3, offset = 12, shaderLocation = 1}, // normal
 		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
 		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity
+		{format = .Uint32, offset = 32, shaderLocation = 4}, // face_id
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
@@ -136,7 +137,7 @@ init_pipeline :: proc() -> bool {
 	drawing_bind_entries := [5]wgpu.BindGroupLayoutEntry {
 		// Uniforms
 		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
-		// Face ID texture (read) - RGBA32Float with barycentric + triangle ID
+		// Face ID texture (read) - RGBA32Float with face ID
 		{
 			binding = 1,
 			visibility = {.Compute},
@@ -144,7 +145,7 @@ init_pipeline :: proc() -> bool {
 		},
 		// Phyon buffer (read)
 		{binding = 2, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
-		// Index buffer (read)
+		// Triangle indices buffer (read) - defines triangle connectivity
 		{binding = 3, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
 		// Output texture (write)
 		{

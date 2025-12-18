@@ -1,30 +1,40 @@
-# Copilot Instructions - Volume Aware Vertices
+# Copilot Instructions - Phyons (Volume Aware Vertices)
 
 ## Project Overview
 
-This is an **Odin-language** WebGPU renderer implementing a deferred G-buffer pipeline for "volume-aware" mesh rendering. The core algorithm shrinks meshes inward via iterative centroid calculations to create skeletal approximations, enabling SDF-like thickness estimation.
+**Odin-language** WebGPU renderer for "volume-aware" mesh rendering. Stores interior + surface positions per vertex to enable SDF-like thickness estimation without ray marching.
 
 ## Architecture
 
-### Rendering Pipeline (Deferred Two-Pass)
-1. **Rasterize Pass** (`rasterize.vs.wgsl`, `rasterize.fs.wgsl`): Writes to G-buffers (normal, material, distance) + dual depth buffers (front/back)
-2. **Depth Pass** (`depth.cs.wgsl`): Computes depth information for thickness estimation
-2. **Shading Pass** (`shading.vs.wgsl`, `shading.fs.wgsl`): Full-screen quad reads G-buffers to compute final lighting/thickness
+### Three-Pass Rendering Pipeline
+1. **Rasterize** (`rasterize.vs/fs.wgsl`): Outputs `face_id` + barycentric coords to `RGBA32Float` texture
+2. **Drawing** (`drawing.cs.wgsl`): Compute shader reads face data, interpolates phyon attributes, computes lighting
+3. **Present** (`present.vs/fs.wgsl`): Full-screen quad renders output texture to screen
 
-### Key Files by Responsibility
-- [state.odin](state.odin) - Global `State` struct: all WGPU handles, camera, buffers, pipelines
-- [render.odin](render.odin) - G-buffer creation (`ensure_gbuffers`), frame rendering
-- [pipeline.odin](pipeline.odin) - Pipeline creation with bind groups and layouts
-- [geometry.odin](geometry.odin) - `Vertex` struct (64 bytes aligned), mesh building
-- [skeletonize.odin](skeletonize.odin) - Centroid-shrinking algorithm with ray-triangle intersection
-- [shaders.odin](shaders.odin) - WGSL shader loading from `.wgsl` files
+### Key Files
+| File | Purpose |
+|------|---------|
+| [types.odin](types.odin) | Global `State` struct with nested: `gapi`, `shaders`, `buffers`, `rendering`, `pipelines`, `camera`, `volume_manager` |
+| [volumes.odin](volumes.odin) | `Shape` (reusable geometry) + `Volume` (instanced transforms) |
+| [geometry.odin](geometry.odin) | `Phyon` struct (position, normal, depth, opacity, face_id), OBJ loading |
+| [pipeline.odin](pipeline.odin) | Pipeline/bind group creation |
+| [render.odin](render.odin) | Texture creation (`ensure_depth_texture`), frame rendering |
+| [shaders.odin](shaders.odin) | WGSL loading with `EMBED_SHADERS` compile flag |
+| [scene.odin](scene.odin) | Scene setup—add shapes/volumes here |
 
-### Data Flow
+### Core Data Structures
+```odin
+Phyon :: struct {           // GPU vertex (40 bytes)
+    position: vec3,         // Interior/centroid position
+    normal:   vec3,         // Surface normal  
+    depth:    f32,          // Distance to surface
+    opacity:  f32,
+    face_id:  u32,
+    _pad:     u32,
+}
 ```
-Vertex → rasterize pass -> depth pass → G-buffers (normal/material/distance) + depth_front/depth_back
-                                     ↓
-                        shading pass → thickness = back_depth - front_depth → final color
-```
+Surface reconstruction: `surface_pos = phyon.position + phyon.normal * phyon.depth`
+
 
 ## Build & Run
 
@@ -35,40 +45,61 @@ Do not cd into subdirectories; run from project root.
  odin run . -out:bin/phyons.exe   # Note the leading space
 ```
 
+Use VS Code tasks: `build`, `run`, `release` (defined in `.vscode/tasks.json`)
+
 ## Code Conventions
 
-### State Management
-- Single global `state: State` variable holds all GPU/window state
-- Nested structs: `state.gapi`, `state.shaders`, `state.buffers`, `state.rendering`, `state.pipelines`, `state.camera`
-- Init order matters: `window → wgpu → shaders → camera → buffers → geometry → pipeline`
+### Init Order (dependencies matter)
+```
+window → wgpu → shaders → camera → volume_manager → scene → buffers → geometry → depth_texture → pipeline
+```
 
-### Resource Cleanup Pattern
-Always release WGPU resources in reverse order:
+### Cleanup Order (reverse of init)
 ```odin
-cleanup :: proc() {
-    cleanup_rendering()  // G-buffers first
-    cleanup_buffers()
-    cleanup_pipelines()
-    cleanup_shaders()
-    cleanup_wgpu()
-    cleanup_window()
+cleanup_rendering() → cleanup_buffers() → cleanup_volume_manager() → cleanup_pipelines() → cleanup_shaders() → cleanup_wgpu()
+```
+
+### Shader Naming
+- Pattern: `{name}.{stage}.wgsl` where stage is `vs`, `fs`, or `cs`
+- Registered in `SHADER_NAMES` array in [shaders.odin](shaders.odin)
+
+### Adding New Shapes
+```odin
+// In scene.odin or custom code:
+shape_id := make_cube(1.0)           // Built-in primitive
+shape_id := load_obj_shape("file.obj")  // OBJ from assets/
+volume_id := add_volume(shape_id)
+translate_volume(volume_id, {x, y, z})
+```
+
+## WGSL Bindings
+
+### Rasterize Pass (group 0)
+- `@binding(0)` Uniforms (view_proj, inv_view_proj, model, camera_pos, time, screen dims)
+
+### Drawing Compute Pass (group 0)
+- `@binding(0)` Uniforms
+- `@binding(1)` Face ID texture (from rasterize)
+- `@binding(2)` Phyon storage buffer (read)
+- `@binding(3)` Index storage buffer (read)
+- `@binding(4)` Output texture (write)
+
+### Uniforms Struct (must match CPU side)
+```wgsl
+struct Uniforms {
+    view_proj: mat4x4<f32>,
+    inv_view_proj: mat4x4<f32>,
+    model: mat4x4<f32>,
+    camera_pos: vec3<f32>,
+    time: f32,
+    screen_width: f32,
+    screen_height: f32,
+    phyon_count: f32,
+    face_count: f32,
 }
 ```
 
-### Shader Naming Convention
-- Files: `{name}.{stage}.wgsl` (e.g., `geo.vs.wgsl`, `shading.fs.wgsl`)
-- Loaded via `SHADER_FILES` table in [shaders.odin](shaders.odin)
-
-## Key Algorithms
-
-### Skeletonization ([skeletonize.odin](skeletonize.odin))
-- Shoots rays inward from face centroids, finds opposite-side hits via Möller–Trumbore
-- Skeleton point = midpoint between face centroid and opposite surface
-- Results averaged per-vertex for smooth interior representation
-
-### Reference Depth
-Each vertex stores `reference_centroid` - displacement to original surface for reconstruction.
-
-## WGSL Shader Bindings
-- Geometry pass: `@group(0) @binding(0)` = uniform buffer (view_proj, model, time)
-- Shading pass: `@binding(0-4)` = G-buffer textures + depths, `@binding(5)` = sampler
+## External Dependencies
+- `vendor:wgpu` - WebGPU bindings
+- `vendor:glfw` - Window management  
+- `vendor/tinyobj` - OBJ file parsing (local copy)

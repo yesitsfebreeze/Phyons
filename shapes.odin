@@ -59,44 +59,20 @@ make_cube :: proc(size: f32 = 1.0, color: vec3 = {1, 1, 1}) -> ShapeId {
 		{-half, half, half}, // 7
 	}
 
-	indices := []u32 {
-		0,
-		1,
-		2,
-		0,
-		2,
-		3,
-		5,
-		4,
-		7,
-		5,
-		7,
-		6,
-		4,
-		0,
-		3,
-		4,
-		3,
-		7,
-		1,
-		5,
-		6,
-		1,
-		6,
-		2,
-		3,
-		2,
-		6,
-		3,
-		6,
-		7,
-		4,
-		5,
-		1,
-		4,
-		1,
-		0,
-	}
+	indices: [dynamic]u32
+	defer delete(indices)
+	append(&indices, 0, 2, 1)
+	append(&indices, 0, 3, 2)
+	append(&indices, 5, 7, 4)
+	append(&indices, 5, 6, 7)
+	append(&indices, 4, 3, 0)
+	append(&indices, 4, 7, 3)
+	append(&indices, 1, 6, 5)
+	append(&indices, 1, 2, 6)
+	append(&indices, 3, 6, 2)
+	append(&indices, 3, 7, 6)
+	append(&indices, 4, 1, 5)
+	append(&indices, 4, 0, 1)
 
-	return make_shape_from_positions(positions, indices)
+	return make_shape_from_positions(positions, indices[:])
 }

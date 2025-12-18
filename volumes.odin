@@ -182,7 +182,7 @@ get_volume :: proc(volume_id: VolumeId) -> ^Volume {
 }
 
 // Rebuild GPU buffers from all visible volumes
-// Expands indexed geometry to non-indexed for per-triangle data
+// Each phyon stores its face_id, indices buffer defines triangle connectivity
 rebuild_volume_buffers :: proc() -> bool {
 	if !state.volume_manager.dirty {
 		return true
@@ -210,7 +210,6 @@ rebuild_volume_buffers :: proc() -> bool {
 	}
 
 	// Build expanded vertex array (3 vertices per triangle, non-indexed)
-	// Each vertex gets triangle_id and vertex_in_tri for barycentric calculation
 	total_verts := total_triangles * 3
 	merged_verts := make([dynamic]Phyon, 0, total_verts)
 	merged_tri_indices := make([dynamic]u32, 0, total_verts)
@@ -219,6 +218,7 @@ rebuild_volume_buffers :: proc() -> bool {
 	defer delete(merged_wire_indices)
 
 	vertex_offset: u32 = 0
+	face_offset: u32 = 0
 
 	for &vol in state.volume_manager.volumes {
 		if !vol.visible {
@@ -232,9 +232,10 @@ rebuild_volume_buffers :: proc() -> bool {
 		num_shape_triangles := len(shape.triangle_indices) / 3
 
 		// Expand each triangle into 3 separate vertices
-		// vertex_index in shader will be sequential (0,1,2,3...) so we can compute
-		// triangle_id = vertex_index / 3 and vertex_in_tri = vertex_index % 3
+		// Each vertex stores the face_id it belongs to
 		for tri_idx := 0; tri_idx < num_shape_triangles; tri_idx += 1 {
+			face_id := face_offset + u32(tri_idx)
+
 			for vert_in_tri := 0; vert_in_tri < 3; vert_in_tri += 1 {
 				// Get original vertex index from index buffer
 				orig_idx := shape.triangle_indices[tri_idx * 3 + vert_in_tri]
@@ -260,9 +261,12 @@ rebuild_volume_buffers :: proc() -> bool {
 				new_vert.depth = v.depth * scale
 				new_vert.opacity = v.opacity
 
+				// Store the face ID this phyon belongs to
+				new_vert.face_id = face_id
+
 				append(&merged_verts, new_vert)
 
-				// Sequential indices for compute shader lookup
+				// Sequential indices for the triangle index buffer
 				append(&merged_tri_indices, vertex_offset + u32(tri_idx * 3 + vert_in_tri))
 			}
 		}
@@ -273,6 +277,7 @@ rebuild_volume_buffers :: proc() -> bool {
 		}
 
 		vertex_offset += u32(num_shape_triangles * 3)
+		face_offset += u32(num_shape_triangles)
 	}
 
 	// Update state buffers
@@ -281,6 +286,7 @@ rebuild_volume_buffers :: proc() -> bool {
 	}
 	state.buffers.phyons = merged_verts[:]
 	state.buffers.phyon_count = u32(len(merged_verts))
+	state.buffers.face_count = face_offset
 
 	// Create GPU buffers
 	if !create_vertex_buffer(merged_verts[:]) {

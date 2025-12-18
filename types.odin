@@ -22,6 +22,7 @@ BuffersState :: struct {
 	index_count:           u32,
 	triangle_index_count:  u32,
 	phyon_count:           u32,
+	face_count:            u32,
 	// Vertex data (CPU-side for updates)
 	phyons:                []Phyon,
 }
@@ -75,10 +76,13 @@ State :: struct {
 
 
 Uniforms :: struct #align (16) {
-	view_proj:      mat4,
-	model:          mat4,
-	time:           f32,
-	screen_width:   f32,
-	screen_height:  f32,
-	triangle_count: f32,
+	view_proj:     mat4,
+	inv_view_proj: mat4,
+	model:         mat4,
+	camera_pos:    vec3,
+	time:          f32,
+	screen_width:  f32,
+	screen_height: f32,
+	phyon_count:   f32,
+	face_count:    f32,
 }

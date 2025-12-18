@@ -151,14 +151,18 @@ render_frame :: proc() {
 	view_matrix := get_view_matrix()
 	proj := get_projection_matrix()
 	view_proj := proj * view_matrix
+	inv_view_proj := mat4_inverse(view_proj)
 
 	uniforms := Uniforms {
-		view_proj      = view_proj,
-		model          = model,
-		time           = state.elapsed,
-		screen_width   = f32(state.gapi.surface_config.width),
-		screen_height  = f32(state.gapi.surface_config.height),
-		triangle_count = f32(state.buffers.triangle_index_count / 3),
+		view_proj     = view_proj,
+		inv_view_proj = inv_view_proj,
+		model         = model,
+		camera_pos    = state.camera.position,
+		time          = state.elapsed,
+		screen_width  = f32(state.gapi.surface_config.width),
+		screen_height = f32(state.gapi.surface_config.height),
+		phyon_count   = f32(state.buffers.phyon_count),
+		face_count    = f32(state.buffers.face_count),
 	}
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,

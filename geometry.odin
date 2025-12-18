@@ -10,6 +10,8 @@ Phyon :: struct {
 	normal:   vec3,
 	depth:    f32,
 	opacity:  f32,
+	face_id:  u32,
+	_pad:     u32,
 }
 
 // Assets directory relative to working directory (project root when using odin run .)

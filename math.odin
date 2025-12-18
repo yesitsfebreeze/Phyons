@@ -36,6 +36,7 @@ mat4_look_at :: linalg.matrix4_look_at_f32
 mat4_perspective :: linalg.matrix4_perspective_f32
 mat4_translate :: linalg.matrix4_translate_f32
 mat4_scale :: linalg.matrix4_scale_f32
+mat4_inverse :: linalg.matrix4_inverse_f32
 
 mat4_rotate_x :: proc(angle: f32) -> mat4 {
 	return linalg.matrix4_rotate_f32(angle, {1, 0, 0})
