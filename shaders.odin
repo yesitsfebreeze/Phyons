@@ -20,31 +20,19 @@ SHADER_EXTENSION: string : ".wgsl"
 ShaderIndex :: enum {
 	GEO_VS,
 	GEO_FS,
-	SHADING_VS,
-	SHADING_FS,
-	WIREFRAME_VS,
-	PRESENT_FS,
 }
 
 SHADER_NAMES := [ShaderIndex]string {
-	.GEO_VS       = "geo.vs",
-	.GEO_FS       = "geo.fs",
-	.SHADING_VS   = "shading.vs",
-	.SHADING_FS   = "shading.fs",
-	.WIREFRAME_VS = "wireframe.vs",
-	.PRESENT_FS   = "present.fs",
+	.GEO_VS = "geo.vs",
+	.GEO_FS = "geo.fs",
 }
 
 // Embedded shader data (only included in release builds)
 when EMBED_SHADERS {
 	@(private = "file")
 	EMBEDDED_SHADERS := [ShaderIndex]string {
-		.GEO_VS       = #load("shaders/geo.vs.wgsl", string),
-		.GEO_FS       = #load("shaders/geo.fs.wgsl", string),
-		.SHADING_VS   = #load("shaders/shading.vs.wgsl", string),
-		.SHADING_FS   = #load("shaders/shading.fs.wgsl", string),
-		.WIREFRAME_VS = #load("shaders/wireframe.vs.wgsl", string),
-		.PRESENT_FS   = #load("shaders/present.fs.wgsl", string),
+		.GEO_VS = #load("shaders/geo.vs.wgsl", string),
+		.GEO_FS = #load("shaders/geo.fs.wgsl", string),
 	}
 }
 

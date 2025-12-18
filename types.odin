@@ -14,50 +14,32 @@ WgpuState :: struct {
 
 BuffersState :: struct {
 	// Geometry buffers
-	vertex_buffer:         wgpu.Buffer,
+	phyon_buffer:          wgpu.Buffer,
 	index_buffer:          wgpu.Buffer,
 	uniform_buffer:        wgpu.Buffer,
 	triangle_index_buffer: wgpu.Buffer,
 	// Counts
 	index_count:           u32,
 	triangle_index_count:  u32,
-	vertex_count:          u32,
+	phyon_count:           u32,
 	// Vertex data (CPU-side for updates)
-	vertices:              []Phyon,
+	phyons:                []Phyon,
 }
 
 RenderingState :: struct {
-	// G-Buffer textures (deferred rendering)
-	gbuffer_normal:        wgpu.Texture,
-	gbuffer_normal_view:   wgpu.TextureView,
-	gbuffer_material:      wgpu.Texture,
-	gbuffer_material_view: wgpu.TextureView,
-	gbuffer_distance:      wgpu.Texture,
-	gbuffer_distance_view: wgpu.TextureView,
-	// Depth textures
-	depth_front:           wgpu.Texture,
-	depth_front_view:      wgpu.TextureView,
-	depth_back:            wgpu.Texture,
-	depth_back_view:       wgpu.TextureView,
-	depth_texture:         wgpu.Texture, // Legacy wireframe depth
-	depth_texture_view:    wgpu.TextureView,
+	// Depth texture
+	depth_texture:      wgpu.Texture,
+	depth_texture_view: wgpu.TextureView,
 	// Dimensions
-	gbuffer_width:         u32,
-	gbuffer_height:        u32,
+	depth_width:        u32,
+	depth_height:       u32,
 }
 
 PipelinesState :: struct {
-	// Render pipelines
-	geometry_pipeline:         wgpu.RenderPipeline,
-	geometry_back_pipeline:    wgpu.RenderPipeline,
-	shading_pipeline:          wgpu.RenderPipeline,
-	wireframe_pipeline:        wgpu.RenderPipeline,
+	// Render pipeline
+	geometry_pipeline:   wgpu.RenderPipeline,
 	// Bind groups
-	geometry_bind_group:       wgpu.BindGroup,
-	shading_bind_group:        wgpu.BindGroup,
-	shading_bind_group_layout: wgpu.BindGroupLayout,
-	// Samplers
-	gbuffer_sampler:           wgpu.Sampler,
+	geometry_bind_group: wgpu.BindGroup,
 }
 
 

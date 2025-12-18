@@ -38,7 +38,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	out.position = uniforms.view_proj * interior_world;
 
 	// Surface position = interior + reference_centroid displacement
-	let surface_pos = in.position + in.reference_centroid;
+	let surface_pos = in.position + in.reference_centroid * 0.5;
 	let surface_world = uniforms.model * vec4<f32>(surface_pos, 1.0);
 	let surface_clip = uniforms.view_proj * surface_world;
 

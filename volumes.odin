@@ -306,11 +306,11 @@ rebuild_volume_buffers :: proc() -> bool {
 	}
 
 	// Update state buffers
-	if state.buffers.vertices != nil {
-		delete(state.buffers.vertices)
+	if state.buffers.phyons != nil {
+		delete(state.buffers.phyons)
 	}
-	state.buffers.vertices = merged_verts[:]
-	state.buffers.vertex_count = u32(len(merged_verts))
+	state.buffers.phyons = merged_verts[:]
+	state.buffers.phyon_count = u32(len(merged_verts))
 
 	// Create GPU buffers
 	if !create_vertex_buffer(merged_verts[:]) {

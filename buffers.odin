@@ -21,8 +21,8 @@ init_buffers :: proc() -> bool {
 
 // Create vertex buffer with given vertices
 create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
-	if state.buffers.vertex_buffer != nil {
-		wgpu.BufferRelease(state.buffers.vertex_buffer)
+	if state.buffers.phyon_buffer != nil {
+		wgpu.BufferRelease(state.buffers.phyon_buffer)
 	}
 
 	vertex_buffer_desc := wgpu.BufferDescriptor {
@@ -31,15 +31,15 @@ create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
 		usage            = {.Vertex, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.vertex_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
-	if state.buffers.vertex_buffer == nil {
+	state.buffers.phyon_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
+	if state.buffers.phyon_buffer == nil {
 		log_err("Failed to create vertex buffer")
 		return false
 	}
 
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
-		state.buffers.vertex_buffer,
+		state.buffers.phyon_buffer,
 		0,
 		raw_data(vertices),
 		uint(vertex_buffer_desc.size),
@@ -113,16 +113,16 @@ create_triangle_index_buffer :: proc(indices: []u16) -> bool {
 
 // Update vertex buffer data on GPU
 update_vertex_buffer :: proc() {
-	if state.buffers.vertex_buffer == nil || state.buffers.vertices == nil {
+	if state.buffers.phyon_buffer == nil || state.buffers.phyons == nil {
 		return
 	}
 
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
-		state.buffers.vertex_buffer,
+		state.buffers.phyon_buffer,
 		0,
-		raw_data(state.buffers.vertices),
-		uint(len(state.buffers.vertices) * size_of(Phyon)),
+		raw_data(state.buffers.phyons),
+		uint(len(state.buffers.phyons) * size_of(Phyon)),
 	)
 }
 
@@ -142,11 +142,11 @@ update_uniform_buffer :: proc(uniforms: ^Uniforms) {
 }
 
 cleanup_buffers :: proc() {
-	if state.buffers.vertices != nil {
-		delete(state.buffers.vertices)
+	if state.buffers.phyons != nil {
+		delete(state.buffers.phyons)
 	}
-	if state.buffers.vertex_buffer != nil {
-		wgpu.BufferRelease(state.buffers.vertex_buffer)
+	if state.buffers.phyon_buffer != nil {
+		wgpu.BufferRelease(state.buffers.phyon_buffer)
 	}
 	if state.buffers.index_buffer != nil {
 		wgpu.BufferRelease(state.buffers.index_buffer)
