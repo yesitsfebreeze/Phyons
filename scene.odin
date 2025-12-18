@@ -1,7 +1,7 @@
 package phyons
 
-// Assets directory relative to executable (bin/)
-ASSETS_DIR :: "../assets/"
+// Assets directory relative to working directory (project root when using odin run .)
+ASSETS_DIR :: "./assets/"
 
 scene_init :: proc() {
 	shape := load_obj_shape(ASSETS_DIR + "fibonacci-sphere.obj", {0.8, 0.2, 0.2})

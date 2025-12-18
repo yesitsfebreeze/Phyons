@@ -28,15 +28,11 @@ Vertex → rasterize pass -> depth pass → G-buffers (normal/material/distance)
 
 ## Build & Run
 
-```bash
-odin run .    # Build and run in one command
-```
-
 Do not cd into subdirectories; run from project root.
 
 **IMPORTANT**: When running terminal commands, the first character is sometimes cut off. Add a leading space before commands to work around this:
 ```bash
- odin run .   # Note the leading space
+ odin run . -out:bin/phyons.exe   # Note the leading space
 ```
 
 ## Code Conventions

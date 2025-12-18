@@ -6,12 +6,10 @@ import "vendor/tinyobj"
 
 
 Phyon :: struct {
-	position:      vec3,
-	normal:        vec3,
-	depth:         f32,
-	opacity:       f32,
-	triangle_id:   u32, // Which triangle this vertex belongs to
-	vertex_in_tri: u32, // 0, 1, or 2 - position within triangle (for barycentric)
+	position: vec3,
+	normal:   vec3,
+	depth:    f32,
+	opacity:  f32,
 }
 
 // Load a shape from an OBJ file using tinyobj

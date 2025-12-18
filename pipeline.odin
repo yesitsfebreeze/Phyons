@@ -75,8 +75,6 @@ init_pipeline :: proc() -> bool {
 		{format = .Float32x3, offset = 12, shaderLocation = 1}, // normal
 		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
 		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity
-		{format = .Uint32, offset = 32, shaderLocation = 4}, // triangle_id
-		{format = .Uint32, offset = 36, shaderLocation = 5}, // vertex_in_tri
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {

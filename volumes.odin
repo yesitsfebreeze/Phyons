@@ -182,14 +182,14 @@ get_volume :: proc(volume_id: VolumeId) -> ^Volume {
 }
 
 // Rebuild GPU buffers from all visible volumes
+// Expands indexed geometry to non-indexed for per-triangle data
 rebuild_volume_buffers :: proc() -> bool {
 	if !state.volume_manager.dirty {
 		return true
 	}
 
-	// Count total vertices and indices
-	total_verts := 0
-	total_tri_indices := 0
+	// Count total triangles and wireframe indices
+	total_triangles := 0
 	total_wire_indices := 0
 
 	for &vol in state.volume_manager.volumes {
@@ -200,19 +200,20 @@ rebuild_volume_buffers :: proc() -> bool {
 		if shape == nil {
 			continue
 		}
-		total_verts += len(shape.phyons)
-		total_tri_indices += len(shape.triangle_indices)
+		total_triangles += len(shape.triangle_indices) / 3
 		total_wire_indices += len(shape.wireframe_indices)
 	}
 
-	if total_verts == 0 {
+	if total_triangles == 0 {
 		state.volume_manager.dirty = false
 		return true
 	}
 
-	// Build merged arrays
+	// Build expanded vertex array (3 vertices per triangle, non-indexed)
+	// Each vertex gets triangle_id and vertex_in_tri for barycentric calculation
+	total_verts := total_triangles * 3
 	merged_verts := make([dynamic]Phyon, 0, total_verts)
-	merged_tri_indices := make([dynamic]u32, 0, total_tri_indices)
+	merged_tri_indices := make([dynamic]u32, 0, total_verts)
 	merged_wire_indices := make([dynamic]u16, 0, total_wire_indices)
 	defer delete(merged_tri_indices)
 	defer delete(merged_wire_indices)
@@ -228,40 +229,50 @@ rebuild_volume_buffers :: proc() -> bool {
 			continue
 		}
 
-		// Transform and add vertices
-		for v in shape.phyons {
-			new_vert := v
+		num_shape_triangles := len(shape.triangle_indices) / 3
 
-			// Transform position (point - uses full transform)
-			pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
-			transformed_pos := vol.transform * pos4
-			new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
+		// Expand each triangle into 3 separate vertices
+		// vertex_index in shader will be sequential (0,1,2,3...) so we can compute
+		// triangle_id = vertex_index / 3 and vertex_in_tri = vertex_index % 3
+		for tri_idx := 0; tri_idx < num_shape_triangles; tri_idx += 1 {
+			for vert_in_tri := 0; vert_in_tri < 3; vert_in_tri += 1 {
+				// Get original vertex index from index buffer
+				orig_idx := shape.triangle_indices[tri_idx * 3 + vert_in_tri]
+				v := shape.phyons[orig_idx]
+				new_vert: Phyon
 
-			// Transform normal (direction - no translation, w=0), then renormalize
-			normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
-			transformed_normal := vol.transform * normal4
-			new_vert.normal = normalize(
-				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
-			)
+				// Transform position (point - uses full transform)
+				pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
+				transformed_pos := vol.transform * pos4
+				new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
 
-			// Scale depth by transform scale (approximate using normal length before normalize)
-			scale := length(vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z})
-			new_vert.depth = v.depth * scale
+				// Transform normal (direction - no translation, w=0), then renormalize
+				normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
+				transformed_normal := vol.transform * normal4
+				new_vert.normal = normalize(
+					vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
+				)
 
-			append(&merged_verts, new_vert)
+				// Scale depth by transform scale (approximate using normal length before normalize)
+				scale := length(
+					vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
+				)
+				new_vert.depth = v.depth * scale
+				new_vert.opacity = v.opacity
+
+				append(&merged_verts, new_vert)
+
+				// Sequential indices for compute shader lookup
+				append(&merged_tri_indices, vertex_offset + u32(tri_idx * 3 + vert_in_tri))
+			}
 		}
 
-		// Add triangle indices with offset
-		for idx in shape.triangle_indices {
-			append(&merged_tri_indices, idx + vertex_offset)
-		}
-
-		// Add wireframe indices with offset
+		// Add wireframe indices with offset (still uses original indexing)
 		for idx in shape.wireframe_indices {
 			append(&merged_wire_indices, u16(u32(idx) + vertex_offset))
 		}
 
-		vertex_offset += u32(len(shape.phyons))
+		vertex_offset += u32(num_shape_triangles * 3)
 	}
 
 	// Update state buffers

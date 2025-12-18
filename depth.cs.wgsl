@@ -13,8 +13,6 @@ struct Phyon {
 	normal: vec3<f32>,
 	depth: f32,
 	opacity: f32,
-	triangle_id: u32,
-	vertex_in_tri: u32,
 }
 
 @group(0) @binding(0)
