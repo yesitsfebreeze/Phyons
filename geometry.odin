@@ -1,24 +1,13 @@
 package phyons
 
-import "core:math/linalg"
 import "core:os"
 import "core:path/filepath"
 import "vendor/tinyobj"
 
-Vertex :: struct {
-	position:           linalg.Vector3f32,
-	color:              linalg.Vector3f32,
-	reference_centroid: linalg.Vector3f32,
-	normal:             linalg.Vector3f32,
-	material_id:        f32, // Using f32 for alignment, will be cast to u32 in shader
-	opacity:            f32,
-	distance_to_center: f32,
-	_pad:               f32, // Padding to 64 bytes
-}
 
 // Load a shape from an OBJ file using tinyobj
 // Returns INVALID_SHAPE_ID on failure
-load_obj_shape :: proc(filename: string, color: linalg.Vector3f32 = {1, 1, 1}) -> ShapeId {
+load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	// Read the OBJ file
 	data, ok := os.read_entire_file(filename)
 	if !ok {
@@ -53,7 +42,7 @@ load_obj_shape :: proc(filename: string, color: linalg.Vector3f32 = {1, 1, 1}) -
 	num_normals := len(obj.attrib.normals) / 3
 
 	// Build vertex positions array
-	positions := make([]linalg.Vector3f32, num_positions)
+	positions := make([]vec3, num_positions)
 	defer delete(positions)
 
 	for i := 0; i < num_positions; i += 1 {
@@ -65,9 +54,9 @@ load_obj_shape :: proc(filename: string, color: linalg.Vector3f32 = {1, 1, 1}) -
 	}
 
 	// Build normals array if available
-	normals: []linalg.Vector3f32
+	normals: []vec3
 	if num_normals > 0 {
-		normals = make([]linalg.Vector3f32, num_normals)
+		normals = make([]vec3, num_normals)
 		defer delete(normals)
 		for i := 0; i < num_normals; i += 1 {
 			normals[i] = {
@@ -101,20 +90,20 @@ load_obj_shape :: proc(filename: string, color: linalg.Vector3f32 = {1, 1, 1}) -
 	}
 
 	// Compute mesh centroid
-	mesh_centroid := linalg.Vector3f32{0, 0, 0}
+	mesh_centroid := vec3{0, 0, 0}
 	for pos in positions {
 		mesh_centroid += pos
 	}
 	mesh_centroid /= f32(len(positions))
 
 	// Build vertices with all attributes
-	vertices := make([]Vertex, num_positions)
+	vertices := make([]Phyon, num_positions)
 	defer delete(vertices)
 
 	for i := 0; i < num_positions; i += 1 {
 		pos := positions[i]
-		dist_to_center := linalg.length(pos - mesh_centroid)
-		vertices[i] = Vertex {
+		dist_to_center := length(pos - mesh_centroid)
+		vertices[i] = Phyon {
 			position           = pos,
 			color              = color,
 			reference_centroid = {0, 0, 0},

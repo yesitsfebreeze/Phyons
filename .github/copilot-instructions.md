@@ -35,15 +35,6 @@ No external dependencies beyond Odin's vendor packages (`glfw`, `wgpu`).
 
 ## Code Conventions
 
-### Vertex Structure (64-byte aligned)
-All vertex attributes must maintain alignment for WebGPU buffer requirements:
-```odin
-Vertex :: struct {
-    position, color, reference_centroid, normal: linalg.Vector3f32,
-    material_id, opacity, distance_to_center, _pad: f32,  // _pad for 64-byte alignment
-}
-```
-
 ### State Management
 - Single global `state: State` variable holds all GPU/window state
 - Nested structs: `state.gapi`, `state.shaders`, `state.buffers`, `state.rendering`, `state.pipelines`, `state.camera`

@@ -20,14 +20,14 @@ init_buffers :: proc() -> bool {
 }
 
 // Create vertex buffer with given vertices
-create_vertex_buffer :: proc(vertices: []Vertex) -> bool {
+create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
 	if state.buffers.vertex_buffer != nil {
 		wgpu.BufferRelease(state.buffers.vertex_buffer)
 	}
 
 	vertex_buffer_desc := wgpu.BufferDescriptor {
 		label            = "Vertex Buffer",
-		size             = u64(len(vertices) * size_of(Vertex)),
+		size             = u64(len(vertices) * size_of(Phyon)),
 		usage            = {.Vertex, .CopyDst},
 		mappedAtCreation = false,
 	}
@@ -122,7 +122,7 @@ update_vertex_buffer :: proc() {
 		state.buffers.vertex_buffer,
 		0,
 		raw_data(state.buffers.vertices),
-		uint(len(state.buffers.vertices) * size_of(Vertex)),
+		uint(len(state.buffers.vertices) * size_of(Phyon)),
 	)
 }
 

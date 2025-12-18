@@ -1,6 +1,5 @@
 package phyons
 
-import "core:math/linalg"
 import "vendor:glfw"
 import "vendor:wgpu"
 
@@ -24,7 +23,7 @@ BuffersState :: struct {
 	triangle_index_count:  u32,
 	vertex_count:          u32,
 	// Vertex data (CPU-side for updates)
-	vertices:              []Vertex,
+	vertices:              []Phyon,
 }
 
 RenderingState :: struct {
@@ -61,18 +60,6 @@ PipelinesState :: struct {
 	gbuffer_sampler:           wgpu.Sampler,
 }
 
-Camera :: struct {
-	position:     vec3,
-	target:       vec3,
-	up:           vec3,
-	yaw:          f32,
-	pitch:        f32,
-	radius:       f32,
-	last_mouse_x: f64,
-	last_mouse_y: f64,
-	first_mouse:  bool,
-}
-
 
 State :: struct {
 	window:         glfw.WindowHandle,
@@ -93,11 +80,50 @@ State :: struct {
 	volume_manager: VolumeManagerState,
 }
 
-state: State
 
 Uniforms :: struct #align (16) {
-	view_proj: linalg.Matrix4f32,
-	model:     linalg.Matrix4f32,
+	view_proj: mat4,
+	model:     mat4,
 	time:      f32,
 	_pad:      [3]f32,
+}
+
+
+Phyon :: struct {
+	position:           vec3,
+	color:              vec3,
+	reference_centroid: vec3,
+	normal:             vec3,
+	material_id:        f32, // Using f32 for alignment, will be cast to u32 in shader
+	opacity:            f32,
+	distance_to_center: f32,
+	_pad:               f32, // Padding to 64 bytes
+}
+
+// A Shape is a reusable geometry definition (vertices + indices)
+Shape :: struct {
+	phyons:            []Phyon,
+	triangle_indices:  []u32, // Triangle indices for geometry pass
+	wireframe_indices: []u16, // Edge indices for wireframe pass
+}
+
+// A Volume is an instance of a shape in the world
+Volume :: struct {
+	shape_id:  ShapeId,
+	transform: mat4,
+	color:     vec3,
+	opacity:   f32,
+	visible:   bool,
+}
+
+ShapeId :: distinct u32
+VolumeId :: distinct u32
+
+INVALID_SHAPE_ID :: ShapeId(max(u32))
+INVALID_VOLUME_ID :: VolumeId(max(u32))
+
+VolumeManagerState :: struct {
+	shapes:  [dynamic]Shape,
+	volumes: [dynamic]Volume,
+	dirty:   bool, // True if buffers need rebuild
 }

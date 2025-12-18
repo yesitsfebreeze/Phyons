@@ -1,6 +1,5 @@
 package phyons
 
-import "core:math/linalg"
 import "vendor:wgpu"
 
 // Create or recreate G-buffer textures when window size changes
@@ -229,7 +228,7 @@ render_frame :: proc() {
 	}
 
 	// Update uniforms
-	model := linalg.matrix4_translate_f32(vec3{0, 0, 0})
+	model := mat4_translate(vec3{0, 0, 0})
 	view_matrix := get_view_matrix()
 	proj := get_projection_matrix()
 	view_proj := proj * view_matrix

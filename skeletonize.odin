@@ -1,6 +1,4 @@
 package phyons
-import "core:math"
-import "core:math/linalg"
 
 SkeletonResult :: struct {
 	original_vertices:  []vec3,
@@ -11,20 +9,20 @@ SkeletonResult :: struct {
 // Ray-triangle intersection (Möller–Trumbore)
 ray_triangle_intersect :: proc(origin, dir, v0, v1, v2: vec3) -> (bool, f32) {
 	edge1, edge2 := v1 - v0, v2 - v0
-	h := linalg.cross(dir, edge2)
-	a := linalg.dot(edge1, h)
+	h := cross(dir, edge2)
+	a := dot(edge1, h)
 	if abs(a) < 0.0000001 do return false, 0
 
 	f := 1.0 / a
 	s := origin - v0
-	u := f * linalg.dot(s, h)
+	u := f * dot(s, h)
 	if u < 0 || u > 1 do return false, 0
 
-	q := linalg.cross(s, edge1)
-	v := f * linalg.dot(dir, q)
+	q := cross(s, edge1)
+	v := f * dot(dir, q)
 	if v < 0 || u + v > 1 do return false, 0
 
-	t := f * linalg.dot(edge2, q)
+	t := f * dot(edge2, q)
 	return t > 0.0000001, t
 }
 
@@ -46,12 +44,12 @@ skeletonize :: proc(vertices: []vec3, indices: []u32) -> SkeletonResult {
 
 		// Face centroid and inward normal
 		centroid := (v0 + v1 + v2) / 3.0
-		normal := linalg.cross(v1 - v0, v2 - v0)
-		if linalg.dot(normal, normal) < 0.0001 do continue
-		ray_dir := -linalg.normalize(normal)
+		normal := cross(v1 - v0, v2 - v0)
+		if dot(normal, normal) < 0.0001 do continue
+		ray_dir := -normalize(normal)
 
 		// Find closest hit on opposite side
-		closest := f32(math.INF_F32)
+		closest := INF
 		for other := 0; other < len(indices); other += 3 {
 			if other / 3 == face do continue
 			hit, t := ray_triangle_intersect(
@@ -65,8 +63,7 @@ skeletonize :: proc(vertices: []vec3, indices: []u32) -> SkeletonResult {
 		}
 
 		// Skeleton point = midpoint to opposite side (or centroid if no hit)
-		skel_pt :=
-			centroid if closest == f32(math.INF_F32) else centroid + ray_dir * (closest * 0.5)
+		skel_pt := centroid if closest == INF else centroid + ray_dir * (closest * 0.5)
 
 		// Add to all 3 vertices of this face
 		skel_sum[a] += skel_pt

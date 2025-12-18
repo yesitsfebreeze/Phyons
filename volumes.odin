@@ -1,36 +1,5 @@
 package phyons
 
-import "core:math"
-import "core:math/linalg"
-
-
-// A Shape is a reusable geometry definition (vertices + indices)
-Shape :: struct {
-	vertices:          []Vertex,
-	triangle_indices:  []u32, // Triangle indices for geometry pass
-	wireframe_indices: []u16, // Edge indices for wireframe pass
-}
-
-// A Volume is an instance of a shape in the world
-Volume :: struct {
-	shape_id:  ShapeId,
-	transform: mat4,
-	color:     linalg.Vector3f32,
-	opacity:   f32,
-	visible:   bool,
-}
-
-ShapeId :: distinct u32
-VolumeId :: distinct u32
-
-INVALID_SHAPE_ID :: ShapeId(max(u32))
-INVALID_VOLUME_ID :: VolumeId(max(u32))
-
-VolumeManagerState :: struct {
-	shapes:  [dynamic]Shape,
-	volumes: [dynamic]Volume,
-	dirty:   bool, // True if buffers need rebuild
-}
 
 // Initialize the volume manager
 init_volume_manager :: proc() {
@@ -40,15 +9,15 @@ init_volume_manager :: proc() {
 }
 
 // Create a shape from vertices and indices, returns a shape_id
-make_shape :: proc(vertices: []Vertex, indices: []u32) -> ShapeId {
+make_shape :: proc(vertices: []Phyon, indices: []u32) -> ShapeId {
 	num_verts := len(vertices)
 
 	// Copy vertices
-	shape_verts := make([]Vertex, num_verts)
+	shape_verts := make([]Phyon, num_verts)
 	copy(shape_verts, vertices)
 
 	// Compute per-vertex normals if not provided
-	vertex_normals := make([]linalg.Vector3f32, num_verts)
+	vertex_normals := make([]vec3, num_verts)
 	defer delete(vertex_normals)
 
 	// Accumulate face normals to vertices
@@ -60,7 +29,7 @@ make_shape :: proc(vertices: []Vertex, indices: []u32) -> ShapeId {
 
 		edge1 := v1 - v0
 		edge2 := v2 - v0
-		face_normal := linalg.cross(edge1, edge2)
+		face_normal := cross(edge1, edge2)
 
 		vertex_normals[i0] += face_normal
 		vertex_normals[i1] += face_normal
@@ -69,11 +38,11 @@ make_shape :: proc(vertices: []Vertex, indices: []u32) -> ShapeId {
 
 	// Normalize and update vertex normals (only if they were zero)
 	for i := 0; i < num_verts; i += 1 {
-		if linalg.length(shape_verts[i].normal) < 0.001 {
+		if length(shape_verts[i].normal) < 0.001 {
 			n := vertex_normals[i]
-			len_sq := linalg.dot(n, n)
+			len_sq := dot(n, n)
 			if len_sq > 0.0001 {
-				shape_verts[i].normal = n / math.sqrt(len_sq)
+				shape_verts[i].normal = n / sqrt(len_sq)
 			}
 		}
 	}
@@ -101,7 +70,7 @@ make_shape :: proc(vertices: []Vertex, indices: []u32) -> ShapeId {
 	}
 
 	shape := Shape {
-		vertices          = shape_verts,
+		phyons            = shape_verts,
 		triangle_indices  = tri_indices,
 		wireframe_indices = wire_indices[:],
 	}
@@ -112,25 +81,25 @@ make_shape :: proc(vertices: []Vertex, indices: []u32) -> ShapeId {
 
 // Create a shape from raw positions and indices (convenience function)
 make_shape_from_positions :: proc(
-	positions: []linalg.Vector3f32,
+	positions: []vec3,
 	indices: []u32,
-	color: linalg.Vector3f32 = {1, 1, 1},
+	color: vec3 = {1, 1, 1},
 ) -> ShapeId {
 	// Compute mesh centroid
-	mesh_centroid := linalg.Vector3f32{0, 0, 0}
+	mesh_centroid := vec3{0, 0, 0}
 	for pos in positions {
 		mesh_centroid += pos
 	}
 	mesh_centroid /= f32(len(positions))
 
 	// Build vertices
-	vertices := make([]Vertex, len(positions))
+	vertices := make([]Phyon, len(positions))
 	defer delete(vertices)
 
 	for i := 0; i < len(positions); i += 1 {
 		pos := positions[i]
-		dist_to_center := linalg.length(pos - mesh_centroid)
-		vertices[i] = Vertex {
+		dist_to_center := length(pos - mesh_centroid)
+		vertices[i] = Phyon {
 			position           = pos,
 			color              = color,
 			reference_centroid = {0, 0, 0},
@@ -149,7 +118,7 @@ make_shape_from_positions :: proc(
 add_volume :: proc(
 	shape_id: ShapeId,
 	transform: mat4 = mat4_IDENTITY,
-	color: linalg.Vector3f32 = {1, 1, 1},
+	color: vec3 = {1, 1, 1},
 	opacity: f32 = 1.0,
 ) -> VolumeId {
 	if int(shape_id) >= len(state.volume_manager.shapes) {
@@ -199,7 +168,7 @@ set_volume_transform :: proc(volume_id: VolumeId, transform: mat4) {
 }
 
 // Update volume color
-set_volume_color :: proc(volume_id: VolumeId, color: linalg.Vector3f32) {
+set_volume_color :: proc(volume_id: VolumeId, color: vec3) {
 	if int(volume_id) >= len(state.volume_manager.volumes) {
 		return
 	}
@@ -242,7 +211,7 @@ rebuild_volume_buffers :: proc() -> bool {
 		if shape == nil {
 			continue
 		}
-		total_verts += len(shape.vertices)
+		total_verts += len(shape.phyons)
 		total_tri_indices += len(shape.triangle_indices)
 		total_wire_indices += len(shape.wireframe_indices)
 	}
@@ -253,7 +222,7 @@ rebuild_volume_buffers :: proc() -> bool {
 	}
 
 	// Build merged arrays
-	merged_verts := make([dynamic]Vertex, 0, total_verts)
+	merged_verts := make([dynamic]Phyon, 0, total_verts)
 	merged_tri_indices := make([dynamic]u16, 0, total_tri_indices)
 	merged_wire_indices := make([dynamic]u16, 0, total_wire_indices)
 	defer delete(merged_tri_indices)
@@ -271,24 +240,20 @@ rebuild_volume_buffers :: proc() -> bool {
 		}
 
 		// Transform and add vertices
-		for v in shape.vertices {
+		for v in shape.phyons {
 			new_vert := v
 
 			// Transform position
-			pos4 := linalg.Vector4f32{v.position.x, v.position.y, v.position.z, 1.0}
+			pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
 			transformed_pos := vol.transform * pos4
 			new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
 
 			// Transform normal (use inverse transpose for correct normal transformation)
 			// For simplicity, assuming uniform scale - just rotate the normal
-			normal4 := linalg.Vector4f32{v.normal.x, v.normal.y, v.normal.z, 0.0}
+			normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
 			transformed_normal := vol.transform * normal4
-			new_vert.normal = linalg.normalize(
-				linalg.Vector3f32 {
-					transformed_normal.x,
-					transformed_normal.y,
-					transformed_normal.z,
-				},
+			new_vert.normal = normalize(
+				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
 			)
 
 			// Apply volume color and opacity
@@ -308,7 +273,7 @@ rebuild_volume_buffers :: proc() -> bool {
 			append(&merged_wire_indices, u16(u32(idx) + vertex_offset))
 		}
 
-		vertex_offset += u32(len(shape.vertices))
+		vertex_offset += u32(len(shape.phyons))
 	}
 
 	// Update state buffers
@@ -343,7 +308,7 @@ mark_volumes_dirty :: proc() {
 // Cleanup volume manager
 cleanup_volume_manager :: proc() {
 	for &shape in state.volume_manager.shapes {
-		if shape.vertices != nil do delete(shape.vertices)
+		if shape.phyons != nil do delete(shape.phyons)
 		if shape.triangle_indices != nil do delete(shape.triangle_indices)
 		if shape.wireframe_indices != nil do delete(shape.wireframe_indices)
 	}

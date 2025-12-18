@@ -163,7 +163,7 @@ init_pipeline :: proc() -> bool {
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
-		arrayStride    = size_of(Vertex),
+		arrayStride    = size_of(Phyon),
 		stepMode       = .Vertex,
 		attributeCount = uint(len(vertex_attributes)),
 		attributes     = raw_data(vertex_attributes),

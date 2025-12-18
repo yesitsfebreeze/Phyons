@@ -1,12 +1,10 @@
 package phyons
 
-import "core:math"
-
 // Create a Fibonacci sphere with spiral line connections
 make_sphere :: proc(radius: f32 = 1.0, num_points: int = 256, color: vec3 = {1, 1, 1}) -> ShapeId {
 	// Golden ratio for Fibonacci distribution
 	PHI :: 1.618033988749895
-	golden_angle := math.PI * (3.0 - math.sqrt(f32(5.0))) // ~2.39996 radians
+	golden_angle := PI * (3.0 - sqrt(f32(5.0))) // ~2.39996 radians
 
 	positions := make([]vec3, num_points)
 	defer delete(positions)
@@ -17,13 +15,13 @@ make_sphere :: proc(radius: f32 = 1.0, num_points: int = 256, color: vec3 = {1, 
 		y := 1.0 - (f32(i) / f32(num_points - 1)) * 2.0
 
 		// radius at this y level
-		r := math.sqrt(1.0 - y * y)
+		r := sqrt(1.0 - y * y)
 
 		// golden angle increment
 		theta := golden_angle * f32(i)
 
-		x := math.cos(theta) * r
-		z := math.sin(theta) * r
+		x := cos(theta) * r
+		z := sin(theta) * r
 
 		positions[i] = vec3{x, y, z} * radius
 	}

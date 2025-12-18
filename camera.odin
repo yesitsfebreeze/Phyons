@@ -1,10 +1,22 @@
 package phyons
 
 import "base:runtime"
-import "core:math"
-import "core:math/linalg"
 import "vendor:glfw"
 import "vendor:wgpu"
+
+
+Camera :: struct {
+	position:     vec3,
+	target:       vec3,
+	up:           vec3,
+	yaw:          f32,
+	pitch:        f32,
+	radius:       f32,
+	last_mouse_x: f64,
+	last_mouse_y: f64,
+	first_mouse:  bool,
+	fov:          f32,
+}
 
 init_camera :: proc() {
 	state.camera = Camera {
@@ -15,6 +27,7 @@ init_camera :: proc() {
 		pitch       = 0.0,
 		radius      = 5.0,
 		first_mouse = true,
+		fov         = 66.0,
 	}
 }
 
@@ -22,13 +35,13 @@ update_camera :: proc() {
 	c := &state.camera
 
 	// Convert spherical to cartesian
-	yaw_rad := math.to_radians(c.yaw)
-	pitch_rad := math.to_radians(c.pitch)
+	yaw_rad := to_radians(c.yaw)
+	pitch_rad := to_radians(c.pitch)
 
 	c.position = vec3 {
-		c.radius * math.cos(pitch_rad) * math.cos(yaw_rad),
-		c.radius * math.sin(pitch_rad),
-		c.radius * math.cos(pitch_rad) * math.sin(yaw_rad),
+		c.radius * cos(pitch_rad) * cos(yaw_rad),
+		c.radius * sin(pitch_rad),
+		c.radius * cos(pitch_rad) * sin(yaw_rad),
 	}
 
 	// Handle keyboard input
@@ -40,14 +53,15 @@ update_camera :: proc() {
 	}
 }
 
-get_view_matrix :: proc() -> linalg.Matrix4f32 {
+get_view_matrix :: proc() -> mat4 {
 	c := &state.camera
-	return linalg.matrix4_look_at_f32(c.position, c.target, c.up)
+	return mat4_look_at(c.position, c.target, c.up)
 }
 
-get_projection_matrix :: proc() -> linalg.Matrix4f32 {
+get_projection_matrix :: proc() -> mat4 {
+	c := &state.camera
 	aspect := f32(state.width) / f32(state.height)
-	return linalg.matrix4_perspective_f32(math.to_radians(f32(45)), aspect, 0.1, 100.0)
+	return mat4_perspective(to_radians(c.fov), aspect, 0.1, 100.0)
 }
 
 mouse_callback :: proc "c" (window: glfw.WindowHandle, xpos, ypos: f64) {

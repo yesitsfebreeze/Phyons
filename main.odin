@@ -2,6 +2,8 @@ package phyons
 
 import "vendor:glfw"
 
+state: State
+
 main :: proc() {
 	init_logging()
 	defer cleanup_logging()
