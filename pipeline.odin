@@ -75,7 +75,6 @@ init_pipeline :: proc() -> bool {
 		{format = .Float32x3, offset = 12, shaderLocation = 1}, // normal
 		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
 		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity
-		{format = .Uint32, offset = 32, shaderLocation = 4}, // face_id
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
@@ -371,8 +370,8 @@ recreate_present_bind_group :: proc() {
 		state.pipelines.present_bind_group = nil
 	}
 
-	// Need output texture to exist
-	if state.rendering.output_texture_view == nil {
+	// Need face ID texture to exist (we're visualizing rasterize output directly)
+	if state.rendering.face_id_texture_view == nil {
 		return
 	}
 
@@ -388,8 +387,9 @@ recreate_present_bind_group :: proc() {
 	}
 	sampler := wgpu.DeviceCreateSampler(state.gapi.device, &sampler_desc)
 
+	// Use face_id_texture to visualize rasterize output directly
 	bind_entries := [2]wgpu.BindGroupEntry {
-		{binding = 0, textureView = state.rendering.output_texture_view},
+		{binding = 0, textureView = state.rendering.face_id_texture_view},
 		{binding = 1, sampler = sampler},
 	}
 	bind_desc := wgpu.BindGroupDescriptor {

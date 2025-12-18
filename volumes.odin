@@ -232,10 +232,8 @@ rebuild_volume_buffers :: proc() -> bool {
 		num_shape_triangles := len(shape.triangle_indices) / 3
 
 		// Expand each triangle into 3 separate vertices
-		// Each vertex stores the face_id it belongs to
+		// vertex_index in shader tells us which triangle we're in
 		for tri_idx := 0; tri_idx < num_shape_triangles; tri_idx += 1 {
-			face_id := face_offset + u32(tri_idx)
-
 			for vert_in_tri := 0; vert_in_tri < 3; vert_in_tri += 1 {
 				// Get original vertex index from index buffer
 				orig_idx := shape.triangle_indices[tri_idx * 3 + vert_in_tri]
@@ -260,9 +258,6 @@ rebuild_volume_buffers :: proc() -> bool {
 				)
 				new_vert.depth = v.depth * scale
 				new_vert.opacity = v.opacity
-
-				// Store the face ID this phyon belongs to
-				new_vert.face_id = face_id
 
 				append(&merged_verts, new_vert)
 
