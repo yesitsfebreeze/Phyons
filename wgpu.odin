@@ -1,6 +1,5 @@
 package phyons
 
-import "core:fmt"
 import "vendor:glfw"
 import "vendor:wgpu"
 
@@ -11,7 +10,7 @@ init_wgpu :: proc() -> bool {
 	instance_desc := wgpu.InstanceDescriptor{}
 	g.instance = wgpu.CreateInstance(&instance_desc)
 	if g.instance == nil {
-		fmt.println("Failed to create WebGPU instance")
+		log_err("Failed to create WebGPU instance")
 		return false
 	}
 
@@ -29,7 +28,7 @@ init_wgpu :: proc() -> bool {
 		g.surface = wgpu.InstanceCreateSurface(g.instance, &surface_desc)
 	}
 	if g.surface == nil {
-		fmt.println("Failed to create surface")
+		log_err("Failed to create surface")
 		return false
 	}
 
@@ -53,14 +52,10 @@ init_wgpu :: proc() -> bool {
 		userdata1 = &g.adapter,
 	}
 
-	_ = wgpu.InstanceRequestAdapter(
-		g.instance,
-		&adapter_options,
-		adapter_callback_info,
-	)
+	_ = wgpu.InstanceRequestAdapter(g.instance, &adapter_options, adapter_callback_info)
 
 	if g.adapter == nil {
-		fmt.println("Failed to get adapter")
+		log_err("Failed to get adapter")
 		return false
 	}
 
@@ -86,7 +81,7 @@ init_wgpu :: proc() -> bool {
 	_ = wgpu.AdapterRequestDevice(g.adapter, &device_desc, device_callback_info)
 
 	if g.device == nil {
-		fmt.println("Failed to get device")
+		log_err("Failed to get device")
 		return false
 	}
 

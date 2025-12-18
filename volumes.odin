@@ -1,12 +1,8 @@
 package phyons
 
-import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 
-// =============================================================================
-// Shape and Volume Management
-// =============================================================================
 
 // A Shape is a reusable geometry definition (vertices + indices)
 Shape :: struct {
@@ -157,7 +153,7 @@ add_volume :: proc(
 	opacity: f32 = 1.0,
 ) -> VolumeId {
 	if int(shape_id) >= len(state.volume_manager.shapes) {
-		fmt.println("Invalid shape_id:", shape_id)
+		log_err("Invalid shape_id:", shape_id)
 		return INVALID_VOLUME_ID
 	}
 

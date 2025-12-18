@@ -1,12 +1,11 @@
 package phyons
 
-import "core:fmt"
 import "vendor:glfw"
 
 init_window :: proc() -> bool {
 	// Initialize GLFW
 	if !glfw.Init() {
-		fmt.println("Failed to initialize GLFW")
+		log_err("Failed to initialize GLFW")
 		return false
 	}
 
@@ -14,16 +13,10 @@ init_window :: proc() -> bool {
 	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
 	glfw.WindowHint(glfw.VISIBLE, glfw.FALSE)
 
-	state.window = glfw.CreateWindow(
-		WINDOW_WIDTH,
-		WINDOW_HEIGHT,
-		"Phyons",
-		nil,
-		nil,
-	)
+	state.window = glfw.CreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Phyons", nil, nil)
 
 	if state.window == nil {
-		fmt.println("Failed to create window")
+		log_err("Failed to create window")
 		return false
 	}
 

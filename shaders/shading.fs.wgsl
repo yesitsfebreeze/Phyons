@@ -27,7 +27,7 @@ fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
 	let back_depth = textureSample(depth_back, tex_sampler, in.uv);
 
 	// Debug: Depth buffer preview in top-right corner (25% of screen)
-	let debug_size = 0.25;
+	let debug_size = 0.125;
 	let debug_uv = (in.uv - vec2<f32>(1.0 - debug_size, 0.0)) / debug_size;
 	if debug_uv.x >= 0.0 && debug_uv.x <= 1.0 && debug_uv.y >= 0.0 && debug_uv.y <= 1.0 {
 		// Sample depth at the remapped UV

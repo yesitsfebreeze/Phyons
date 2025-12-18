@@ -1,6 +1,5 @@
 package phyons
 
-import "core:fmt"
 import "core:os"
 import "core:strings"
 import "vendor:wgpu"
@@ -63,7 +62,7 @@ when EMBED_SHADERS {
 		defer delete(path)
 		data, ok := os.read_entire_file(path)
 		if !ok {
-			fmt.println("Failed to read shader file:", path)
+			log_info("Failed to read shader file:", path)
 			return "", false
 		}
 		return string(data), true
@@ -74,9 +73,9 @@ init_shaders :: proc() -> bool {
 	state.shaders.modules = make(map[string]wgpu.ShaderModule)
 
 	when EMBED_SHADERS {
-		fmt.println("Using embedded shaders (release mode)")
+		log_info("Using embedded shaders (release mode)")
 	} else {
-		fmt.println("Loading shaders from disk (debug mode)")
+		log_info("Loading shaders from disk (debug mode)")
 	}
 
 	for idx in ShaderIndex {
@@ -102,12 +101,11 @@ init_shaders :: proc() -> bool {
 
 		module := wgpu.DeviceCreateShaderModule(state.gapi.device, &desc)
 		if module == nil {
-			fmt.println("Failed to create shader module:", name)
+			log_info("Failed to create shader module:", name)
 			return false
 		}
 
 		state.shaders.modules[name] = module
-		fmt.println("Loaded shader:", name)
 	}
 
 	return true
@@ -118,7 +116,7 @@ get_shader :: proc(name: string) -> wgpu.ShaderModule {
 	if module, ok := state.shaders.modules[name]; ok {
 		return module
 	}
-	fmt.println("Shader not found:", name)
+	log_info("Shader not found:", name)
 	return nil
 }
 

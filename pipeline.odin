@@ -1,6 +1,5 @@
 package phyons
 
-import "core:fmt"
 import "vendor:wgpu"
 
 init_pipeline :: proc() -> bool {
@@ -21,7 +20,7 @@ init_pipeline :: proc() -> bool {
 	   shade_fragment_shader == nil ||
 	   wire_vertex_shader == nil ||
 	   wire_fragment_shader == nil {
-		fmt.println("Failed to get required shader modules")
+		log_err("Failed to get required shader modules")
 		return false
 	}
 
@@ -214,7 +213,7 @@ init_pipeline :: proc() -> bool {
 		&geom_pipeline_desc,
 	)
 	if state.pipelines.geometry_pipeline == nil {
-		fmt.println("Failed to create geometry pipeline")
+		log_err("Failed to create geometry pipeline")
 		return false
 	}
 
@@ -245,7 +244,7 @@ init_pipeline :: proc() -> bool {
 		&geom_back_pipeline_desc,
 	)
 	if state.pipelines.geometry_back_pipeline == nil {
-		fmt.println("Failed to create backface geometry pipeline")
+		log_err("Failed to create backface geometry pipeline")
 		return false
 	}
 
@@ -283,7 +282,7 @@ init_pipeline :: proc() -> bool {
 		&shade_pipeline_desc,
 	)
 	if state.pipelines.shading_pipeline == nil {
-		fmt.println("Failed to create shading pipeline")
+		log_err("Failed to create shading pipeline")
 		return false
 	}
 
@@ -329,7 +328,7 @@ init_pipeline :: proc() -> bool {
 		&wire_pipeline_desc,
 	)
 	if state.pipelines.wireframe_pipeline == nil {
-		fmt.println("Failed to create wireframe pipeline")
+		log_err("Failed to create wireframe pipeline")
 		return false
 	}
 

@@ -1,6 +1,5 @@
 package phyons
 
-import "core:fmt"
 import "core:math/linalg"
 import "vendor:wgpu"
 
@@ -44,7 +43,7 @@ ensure_gbuffers :: proc() -> bool {
 	}
 	state.rendering.gbuffer_normal = wgpu.DeviceCreateTexture(state.gapi.device, &normal_desc)
 	if state.rendering.gbuffer_normal == nil {
-		fmt.println("Failed to create G-buffer normal texture")
+		log_err("Failed to create G-buffer normal texture")
 		return false
 	}
 
@@ -71,7 +70,7 @@ ensure_gbuffers :: proc() -> bool {
 	}
 	state.rendering.gbuffer_material = wgpu.DeviceCreateTexture(state.gapi.device, &material_desc)
 	if state.rendering.gbuffer_material == nil {
-		fmt.println("Failed to create G-buffer material texture")
+		log_err("Failed to create G-buffer material texture")
 		return false
 	}
 
@@ -98,7 +97,7 @@ ensure_gbuffers :: proc() -> bool {
 	}
 	state.rendering.gbuffer_distance = wgpu.DeviceCreateTexture(state.gapi.device, &distance_desc)
 	if state.rendering.gbuffer_distance == nil {
-		fmt.println("Failed to create G-buffer distance texture")
+		log_err("Failed to create G-buffer distance texture")
 		return false
 	}
 
@@ -125,7 +124,7 @@ ensure_gbuffers :: proc() -> bool {
 	}
 	state.rendering.depth_front = wgpu.DeviceCreateTexture(state.gapi.device, &depth_front_desc)
 	if state.rendering.depth_front == nil {
-		fmt.println("Failed to create depth front texture")
+		log_err("Failed to create depth front texture")
 		return false
 	}
 
@@ -152,7 +151,7 @@ ensure_gbuffers :: proc() -> bool {
 	}
 	state.rendering.depth_back = wgpu.DeviceCreateTexture(state.gapi.device, &depth_back_desc)
 	if state.rendering.depth_back == nil {
-		fmt.println("Failed to create depth back texture")
+		log_err("Failed to create depth back texture")
 		return false
 	}
 
@@ -187,7 +186,7 @@ ensure_gbuffers :: proc() -> bool {
 		&shade_bind_desc,
 	)
 	if state.pipelines.shading_bind_group == nil {
-		fmt.println("Failed to create shading bind group")
+		log_err("Failed to create shading bind group")
 		return false
 	}
 
@@ -208,7 +207,7 @@ render_frame :: proc() {
 	surface_texture := wgpu.SurfaceGetCurrentTexture(state.gapi.surface)
 
 	if surface_texture.status != .SuccessOptimal {
-		fmt.println("Failed to get surface texture")
+		log_err("Failed to get surface texture")
 		return
 	}
 	defer wgpu.TextureRelease(surface_texture.texture)
@@ -225,7 +224,7 @@ render_frame :: proc() {
 
 	// Ensure G-buffers are created/resized
 	if !ensure_gbuffers() {
-		fmt.println("Failed to ensure G-buffers")
+		log_err("Failed to ensure G-buffers")
 		return
 	}
 

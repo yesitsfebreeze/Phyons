@@ -1,11 +1,6 @@
 package phyons
 
-import "core:fmt"
 import "vendor:wgpu"
-
-// =============================================================================
-// Buffer Creation and Management
-// =============================================================================
 
 init_buffers :: proc() -> bool {
 	// Create uniform buffer
@@ -17,7 +12,7 @@ init_buffers :: proc() -> bool {
 	}
 	state.buffers.uniform_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &uniform_buffer_desc)
 	if state.buffers.uniform_buffer == nil {
-		fmt.println("Failed to create uniform buffer")
+		log_err("Failed to create uniform buffer")
 		return false
 	}
 
@@ -38,7 +33,7 @@ create_vertex_buffer :: proc(vertices: []Vertex) -> bool {
 	}
 	state.buffers.vertex_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
 	if state.buffers.vertex_buffer == nil {
-		fmt.println("Failed to create vertex buffer")
+		log_err("Failed to create vertex buffer")
 		return false
 	}
 
@@ -67,7 +62,7 @@ create_index_buffer :: proc(indices: []u16) -> bool {
 	}
 	state.buffers.index_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &index_buffer_desc)
 	if state.buffers.index_buffer == nil {
-		fmt.println("Failed to create index buffer")
+		log_err("Failed to create index buffer")
 		return false
 	}
 
@@ -100,7 +95,7 @@ create_triangle_index_buffer :: proc(indices: []u16) -> bool {
 		&tri_index_buffer_desc,
 	)
 	if state.buffers.triangle_index_buffer == nil {
-		fmt.println("Failed to create triangle index buffer")
+		log_err("Failed to create triangle index buffer")
 		return false
 	}
 
