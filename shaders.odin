@@ -20,30 +20,24 @@ SHADER_EXTENSION: string : ".wgsl"
 
 // Shader file definitions as name-index pairs
 ShaderIndex :: enum {
-	RASTERIZE_VS,
-	RASTERIZE_FS,
 	DRAWING_CS,
 	PRESENT_VS,
 	PRESENT_FS,
 }
 
 SHADER_NAMES := [ShaderIndex]string {
-	.RASTERIZE_VS = "rasterize.vs",
-	.RASTERIZE_FS = "rasterize.fs",
-	.DRAWING_CS   = "drawing.cs",
-	.PRESENT_VS   = "present.vs",
-	.PRESENT_FS   = "present.fs",
+	.DRAWING_CS = "drawing.cs",
+	.PRESENT_VS = "present.vs",
+	.PRESENT_FS = "present.fs",
 }
 
 // Embedded shader data (only included in release builds)
 when EMBED_SHADERS {
 	@(private = "file")
 	EMBEDDED_SHADERS := [ShaderIndex]string {
-		.RASTERIZE_VS = #load("rasterize.vs.wgsl", string),
-		.RASTERIZE_FS = #load("rasterize.fs.wgsl", string),
-		.DRAWING_CS   = #load("drawing.cs.wgsl", string),
-		.PRESENT_VS   = #load("present.vs.wgsl", string),
-		.PRESENT_FS   = #load("present.fs.wgsl", string),
+		.DRAWING_CS = #load("drawing.cs.wgsl", string),
+		.PRESENT_VS = #load("present.vs.wgsl", string),
+		.PRESENT_FS = #load("present.fs.wgsl", string),
 	}
 }
 

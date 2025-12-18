@@ -19,62 +19,122 @@ init_buffers :: proc() -> bool {
 	return true
 }
 
-// Create vertex buffer with given vertices
-create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
-	if state.buffers.phyon_buffer != nil {
-		wgpu.BufferRelease(state.buffers.phyon_buffer)
+// Create split phyon buffers (inside + outside)
+create_split_phyon_buffers :: proc(inside: []Phyon_Inside, outside: []Phyon_Outside) -> bool {
+	// Release old buffers
+	if state.buffers.inside_phyon_buffer != nil {
+		wgpu.BufferRelease(state.buffers.inside_phyon_buffer)
+	}
+	if state.buffers.outside_phyon_buffer != nil {
+		wgpu.BufferRelease(state.buffers.outside_phyon_buffer)
 	}
 
-	vertex_buffer_desc := wgpu.BufferDescriptor {
-		label            = "Vertex Buffer",
-		size             = u64(len(vertices) * size_of(Phyon)),
-		usage            = {.Vertex, .CopyDst, .Storage},
+	// Create inside phyon buffer
+	inside_buffer_desc := wgpu.BufferDescriptor {
+		label            = "Inside Phyon Buffer",
+		size             = u64(len(inside) * size_of(Phyon_Inside)),
+		usage            = {.Storage, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.phyon_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
-	if state.buffers.phyon_buffer == nil {
-		log_err("Failed to create vertex buffer")
+	state.buffers.inside_phyon_buffer = wgpu.DeviceCreateBuffer(
+		state.gapi.device,
+		&inside_buffer_desc,
+	)
+	if state.buffers.inside_phyon_buffer == nil {
+		log_err("Failed to create inside phyon buffer")
 		return false
 	}
 
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
-		state.buffers.phyon_buffer,
+		state.buffers.inside_phyon_buffer,
 		0,
-		raw_data(vertices),
-		uint(vertex_buffer_desc.size),
+		raw_data(inside),
+		uint(inside_buffer_desc.size),
+	)
+
+	// Create outside phyon buffer
+	outside_buffer_desc := wgpu.BufferDescriptor {
+		label            = "Outside Phyon Buffer",
+		size             = u64(len(outside) * size_of(Phyon_Outside)),
+		usage            = {.Storage, .CopyDst},
+		mappedAtCreation = false,
+	}
+	state.buffers.outside_phyon_buffer = wgpu.DeviceCreateBuffer(
+		state.gapi.device,
+		&outside_buffer_desc,
+	)
+	if state.buffers.outside_phyon_buffer == nil {
+		log_err("Failed to create outside phyon buffer")
+		return false
+	}
+
+	wgpu.QueueWriteBuffer(
+		state.gapi.queue,
+		state.buffers.outside_phyon_buffer,
+		0,
+		raw_data(outside),
+		uint(outside_buffer_desc.size),
 	)
 
 	return true
 }
 
-// Create wireframe index buffer (line list)
-create_index_buffer :: proc(indices: []u16) -> bool {
-	if state.buffers.index_buffer != nil {
-		wgpu.BufferRelease(state.buffers.index_buffer)
+// Create volume info buffer
+create_volume_info_buffer :: proc(volume_infos: []VolumeGPU) -> bool {
+	if state.buffers.volume_info_buffer != nil {
+		wgpu.BufferRelease(state.buffers.volume_info_buffer)
 	}
 
-	index_buffer_desc := wgpu.BufferDescriptor {
-		label            = "Index Buffer",
-		size             = u64(len(indices) * size_of(u16)),
-		usage            = {.Index, .CopyDst},
+	if len(volume_infos) == 0 {
+		return true
+	}
+
+	buffer_desc := wgpu.BufferDescriptor {
+		label            = "Volume Info Buffer",
+		size             = u64(len(volume_infos) * size_of(VolumeGPU)),
+		usage            = {.Storage, .CopyDst},
 		mappedAtCreation = false,
 	}
-	state.buffers.index_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &index_buffer_desc)
-	if state.buffers.index_buffer == nil {
-		log_err("Failed to create index buffer")
+	state.buffers.volume_info_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &buffer_desc)
+	if state.buffers.volume_info_buffer == nil {
+		log_err("Failed to create volume info buffer")
 		return false
 	}
 
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
-		state.buffers.index_buffer,
+		state.buffers.volume_info_buffer,
 		0,
-		raw_data(indices),
-		uint(index_buffer_desc.size),
+		raw_data(volume_infos),
+		uint(buffer_desc.size),
 	)
 
-	state.buffers.index_count = u32(len(indices))
+	return true
+}
+
+// Create draw order buffer (for GPU sorting)
+create_draw_order_buffer :: proc(max_volumes: u32) -> bool {
+	if state.buffers.draw_order_buffer != nil {
+		wgpu.BufferRelease(state.buffers.draw_order_buffer)
+	}
+
+	if max_volumes == 0 {
+		return true
+	}
+
+	buffer_desc := wgpu.BufferDescriptor {
+		label            = "Draw Order Buffer",
+		size             = u64(max_volumes * size_of(u32)),
+		usage            = {.Storage, .CopyDst},
+		mappedAtCreation = false,
+	}
+	state.buffers.draw_order_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &buffer_desc)
+	if state.buffers.draw_order_buffer == nil {
+		log_err("Failed to create draw order buffer")
+		return false
+	}
+
 	return true
 }
 
@@ -142,24 +202,21 @@ update_uniform_buffer :: proc(uniforms: ^Uniforms) {
 }
 
 cleanup_buffers :: proc() {
-	if state.buffers.phyons != nil {
-		delete(state.buffers.phyons)
-	}
-	if state.buffers.phyon_buffer != nil {
-		wgpu.BufferRelease(state.buffers.phyon_buffer)
-	}
-	if state.buffers.index_buffer != nil {
-		wgpu.BufferRelease(state.buffers.index_buffer)
-	}
-	if state.buffers.triangle_index_buffer != nil {
-		wgpu.BufferRelease(state.buffers.triangle_index_buffer)
-	}
-	if state.buffers.depth_buffer != nil {
-		wgpu.BufferRelease(state.buffers.depth_buffer)
-	}
-	if state.buffers.uniform_buffer != nil {
-		wgpu.BufferRelease(state.buffers.uniform_buffer)
-	}
+	// CPU-side data
+	if state.buffers.inside_phyons != nil do delete(state.buffers.inside_phyons)
+	if state.buffers.outside_phyons != nil do delete(state.buffers.outside_phyons)
+	if state.buffers.volume_infos != nil do delete(state.buffers.volume_infos)
+	if state.buffers.phyons != nil do delete(state.buffers.phyons)
+
+	// GPU buffers
+	if state.buffers.inside_phyon_buffer != nil do wgpu.BufferRelease(state.buffers.inside_phyon_buffer)
+	if state.buffers.outside_phyon_buffer != nil do wgpu.BufferRelease(state.buffers.outside_phyon_buffer)
+	if state.buffers.volume_info_buffer != nil do wgpu.BufferRelease(state.buffers.volume_info_buffer)
+	if state.buffers.draw_order_buffer != nil do wgpu.BufferRelease(state.buffers.draw_order_buffer)
+	if state.buffers.phyon_buffer != nil do wgpu.BufferRelease(state.buffers.phyon_buffer)
+	if state.buffers.triangle_index_buffer != nil do wgpu.BufferRelease(state.buffers.triangle_index_buffer)
+	if state.buffers.depth_buffer != nil do wgpu.BufferRelease(state.buffers.depth_buffer)
+	if state.buffers.uniform_buffer != nil do wgpu.BufferRelease(state.buffers.uniform_buffer)
 }
 
 // Create or resize software depth buffer for compute shader

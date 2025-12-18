@@ -13,51 +13,47 @@ WgpuState :: struct {
 }
 
 BuffersState :: struct {
-	// Geometry buffers
-	phyon_buffer:          wgpu.Buffer,
-	index_buffer:          wgpu.Buffer,
+	// Split phyon buffers (new architecture)
+	inside_phyon_buffer:   wgpu.Buffer,
+	outside_phyon_buffer:  wgpu.Buffer,
+	volume_info_buffer:    wgpu.Buffer,
+	draw_order_buffer:     wgpu.Buffer,
+	// Other buffers
 	uniform_buffer:        wgpu.Buffer,
 	triangle_index_buffer: wgpu.Buffer,
 	depth_buffer:          wgpu.Buffer, // Software depth for compute shader
 	// Counts
-	index_count:           u32,
 	triangle_index_count:  u32,
 	phyon_count:           u32,
 	face_count:            u32,
-	// Vertex data (CPU-side for updates)
+	volume_count:          u32,
+	// CPU-side data
+	inside_phyons:         []Phyon_Inside,
+	outside_phyons:        []Phyon_Outside,
+	volume_infos:          []VolumeGPU,
+	// Legacy (to be removed)
+	phyon_buffer:          wgpu.Buffer,
 	phyons:                []Phyon,
 }
 
 RenderingState :: struct {
-	// Hardware depth texture (z-buffer for rasterize pass)
-	depth_texture:                wgpu.Texture,
-	depth_texture_view:           wgpu.TextureView,
-	// Inside+depth texture (xyz=inside position, w=phyon depth)
-	inside_depth_texture:         wgpu.Texture,
-	inside_depth_texture_view:    wgpu.TextureView,
-	// Normal+material texture (xyz=normal, w=material_id)
-	normal_material_texture:      wgpu.Texture,
-	normal_material_texture_view: wgpu.TextureView,
 	// Output texture (final image from compute pass)
-	output_texture:               wgpu.Texture,
-	output_texture_view:          wgpu.TextureView,
+	output_texture:      wgpu.Texture,
+	output_texture_view: wgpu.TextureView,
 	// Dimensions
-	depth_width:                  u32,
-	depth_height:                 u32,
+	render_width:        u32,
+	render_height:       u32,
 }
 
 PipelinesState :: struct {
-	// Rasterize pipeline (outputs inside+depth and normal+material)
-	rasterize_pipeline:   wgpu.RenderPipeline,
-	rasterize_bind_group: wgpu.BindGroup,
 	// Clear compute pipeline
-	clear_pipeline:       wgpu.ComputePipeline,
-	// Drawing compute pipeline (reprojects to smooth surface)
-	drawing_pipeline:     wgpu.ComputePipeline,
-	drawing_bind_group:   wgpu.BindGroup,
+	clear_pipeline:     wgpu.ComputePipeline,
+	// Drawing compute pipeline (pure compute rasterization)
+	drawing_pipeline:   wgpu.ComputePipeline,
+	drawing_bind_group: wgpu.BindGroup,
 	// Present pipeline (renders output texture to screen)
-	present_pipeline:     wgpu.RenderPipeline,
-	present_bind_group:   wgpu.BindGroup,
+	present_pipeline:   wgpu.RenderPipeline,
+	present_bind_group: wgpu.BindGroup,
 }
 
 
@@ -84,11 +80,22 @@ State :: struct {
 Uniforms :: struct #align (16) {
 	view_proj:     mat4,
 	inv_view_proj: mat4,
-	model:         mat4,
+	view:          mat4, // View matrix for depth sorting
 	camera_pos:    vec3,
 	time:          f32,
 	screen_width:  f32,
 	screen_height: f32,
-	phyon_count:   f32,
-	face_count:    f32,
+	volume_count:  u32,
+	_pad:          u32,
+}
+
+// GPU-side volume info for compute shader - 96 bytes aligned
+VolumeGPU :: struct #align (16) {
+	model:          mat4, // Model transform (64 bytes)
+	centroid:       vec3, // Center point for depth sorting (12 bytes)
+	phyon_offset:   u32, // Start index in phyon buffers (4 bytes)
+	phyon_count:    u32, // Number of phyons (4 bytes)
+	index_offset:   u32, // Start index in index buffer (4 bytes)
+	triangle_count: u32, // Number of triangles (4 bytes)
+	_pad:           u32, // Padding (4 bytes)
 }

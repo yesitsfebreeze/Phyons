@@ -1,11 +1,12 @@
 package phyons
 
 
-// A Shape is a reusable geometry definition (vertices + indices)
+// A Shape is a reusable geometry definition (split phyon buffers + indices)
 Shape :: struct {
-	phyons:            []Phyon,
-	triangle_indices:  []u32, // Triangle indices for geometry pass
-	wireframe_indices: []u16, // Edge indices for wireframe pass
+	inside_phyons:    []Phyon_Inside,
+	outside_phyons:   []Phyon_Outside,
+	triangle_indices: []u32,
+	centroid:         vec3, // Average of inside positions, for depth sorting
 }
 
 // A Volume is an instance of a shape in the world
@@ -37,40 +38,42 @@ init_volume_manager :: proc() {
 	state.volume_manager.dirty = false
 }
 
-// Create a shape from vertices and indices, returns a shape_id
-make_shape :: proc(vertices: []Phyon, indices: []u32) -> ShapeId {
-	num_verts := len(vertices)
+// Create a shape from split phyon buffers and indices, returns a shape_id
+make_shape :: proc(
+	inside_phyons: []Phyon_Inside,
+	outside_phyons: []Phyon_Outside,
+	indices: []u32,
+) -> ShapeId {
+	assert(len(inside_phyons) == len(outside_phyons), "Inside/outside phyon counts must match")
 
-	// Copy vertices
-	shape_verts := make([]Phyon, num_verts)
-	copy(shape_verts, vertices)
+	num_verts := len(inside_phyons)
+
+	// Copy inside phyons
+	shape_inside := make([]Phyon_Inside, num_verts)
+	copy(shape_inside, inside_phyons)
+
+	// Copy outside phyons
+	shape_outside := make([]Phyon_Outside, num_verts)
+	copy(shape_outside, outside_phyons)
 
 	// Copy triangle indices
 	tri_indices := make([]u32, len(indices))
 	copy(tri_indices, indices)
 
-	// Build wireframe indices from edges
-	edge_set := make(map[[2]int]bool)
-	defer delete(edge_set)
-
-	for i := 0; i < len(indices); i += 3 {
-		a, b, c := int(indices[i]), int(indices[i + 1]), int(indices[i + 2])
-		edges := [][2]int{{a, b}, {b, c}, {c, a}}
-		for edge in edges {
-			sorted_edge := [2]int{min(edge[0], edge[1]), max(edge[0], edge[1])}
-			edge_set[sorted_edge] = true
-		}
+	// Compute centroid from inside positions
+	centroid := vec3{0, 0, 0}
+	for p in inside_phyons {
+		centroid += p.position
 	}
-
-	wire_indices := make([dynamic]u16, 0, len(edge_set) * 2)
-	for edge in edge_set {
-		append(&wire_indices, u16(edge[0]), u16(edge[1]))
+	if num_verts > 0 {
+		centroid /= f32(num_verts)
 	}
 
 	shape := Shape {
-		phyons            = shape_verts,
-		triangle_indices  = tri_indices,
-		wireframe_indices = wire_indices[:],
+		inside_phyons    = shape_inside,
+		outside_phyons   = shape_outside,
+		triangle_indices = tri_indices,
+		centroid         = centroid,
 	}
 
 	append(&state.volume_manager.shapes, shape)
@@ -86,21 +89,29 @@ make_shape_from_positions :: proc(positions: []vec3, indices: []u32) -> ShapeId 
 	}
 	mesh_centroid /= f32(len(positions))
 
-	// Build vertices
-	vertices := make([]Phyon, len(positions))
-	defer delete(vertices)
+	// Build split phyon buffers
+	inside_phyons := make([]Phyon_Inside, len(positions))
+	outside_phyons := make([]Phyon_Outside, len(positions))
+	defer delete(inside_phyons)
+	defer delete(outside_phyons)
 
 	for i := 0; i < len(positions); i += 1 {
 		pos := positions[i]
-		ref := pos - mesh_centroid
-		vertices[i] = Phyon {
-			position = mesh_centroid,
-			normal   = normalize(ref),
-			depth    = length(ref),
+		to_surface := pos - mesh_centroid
+		normal := normalize(to_surface)
+
+		inside_phyons[i] = Phyon_Inside {
+			position    = mesh_centroid,
+			material_id = 0,
+		}
+		outside_phyons[i] = Phyon_Outside {
+			position    = pos,
+			material_id = 0,
+			normal      = normal,
 		}
 	}
 
-	return make_shape(vertices, indices)
+	return make_shape(inside_phyons, outside_phyons, indices)
 }
 
 // Add a volume (instance of a shape) to the scene
@@ -187,10 +198,10 @@ rebuild_volume_buffers :: proc() -> bool {
 		return true
 	}
 
-	// Count totals
+	// Count totals and visible volumes
 	total_verts := 0
 	total_triangles := 0
-	total_wire_indices := 0
+	visible_volume_count := 0
 
 	for &vol in state.volume_manager.volumes {
 		if !vol.visible {
@@ -200,9 +211,9 @@ rebuild_volume_buffers :: proc() -> bool {
 		if shape == nil {
 			continue
 		}
-		total_verts += len(shape.phyons)
+		total_verts += len(shape.inside_phyons)
 		total_triangles += len(shape.triangle_indices) / 3
-		total_wire_indices += len(shape.wireframe_indices)
+		visible_volume_count += 1
 	}
 
 	if total_verts == 0 {
@@ -211,13 +222,14 @@ rebuild_volume_buffers :: proc() -> bool {
 	}
 
 	// Build merged arrays
-	merged_verts := make([dynamic]Phyon, 0, total_verts)
+	merged_inside := make([dynamic]Phyon_Inside, 0, total_verts)
+	merged_outside := make([dynamic]Phyon_Outside, 0, total_verts)
 	merged_tri_indices := make([dynamic]u32, 0, total_triangles * 3)
-	merged_wire_indices := make([dynamic]u16, 0, total_wire_indices)
+	volume_infos := make([dynamic]VolumeGPU, 0, visible_volume_count)
 	defer delete(merged_tri_indices)
-	defer delete(merged_wire_indices)
 
 	vertex_offset: u32 = 0
+	index_offset: u32 = 0
 
 	for &vol in state.volume_manager.volumes {
 		if !vol.visible {
@@ -228,29 +240,59 @@ rebuild_volume_buffers :: proc() -> bool {
 			continue
 		}
 
-		// Transform and add vertices
-		for i := 0; i < len(shape.phyons); i += 1 {
-			v := shape.phyons[i]
-			new_vert: Phyon
+		num_phyons := u32(len(shape.inside_phyons))
+		num_triangles := u32(len(shape.triangle_indices) / 3)
 
-			// Transform position (point - uses full transform)
-			pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
-			transformed_pos := vol.transform * pos4
-			new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
+		// Transform centroid to world space
+		centroid4 := vec4{shape.centroid.x, shape.centroid.y, shape.centroid.z, 1.0}
+		world_centroid := vol.transform * centroid4
 
-			// Transform normal (direction - no translation, w=0), then renormalize
-			normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
-			transformed_normal := vol.transform * normal4
-			new_vert.normal = normalize(
-				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
+		// Add volume info
+		vol_info := VolumeGPU {
+			model          = vol.transform,
+			centroid       = {world_centroid.x, world_centroid.y, world_centroid.z},
+			phyon_offset   = vertex_offset,
+			phyon_count    = num_phyons,
+			index_offset   = index_offset,
+			triangle_count = num_triangles,
+		}
+		append(&volume_infos, vol_info)
+
+		// Transform and add phyons
+		for i := 0; i < int(num_phyons); i += 1 {
+			inside := shape.inside_phyons[i]
+			outside := shape.outside_phyons[i]
+
+			// Transform inside position
+			in_pos4 := vec4{inside.position.x, inside.position.y, inside.position.z, 1.0}
+			in_transformed := vol.transform * in_pos4
+
+			// Transform outside position
+			out_pos4 := vec4{outside.position.x, outside.position.y, outside.position.z, 1.0}
+			out_transformed := vol.transform * out_pos4
+
+			// Transform normal (direction - no translation, w=0)
+			normal4 := vec4{outside.normal.x, outside.normal.y, outside.normal.z, 0.0}
+			normal_transformed := vol.transform * normal4
+			new_normal := normalize(
+				vec3{normal_transformed.x, normal_transformed.y, normal_transformed.z},
 			)
 
-			// Scale depth by transform scale
-			scale := length(vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z})
-			new_vert.depth = v.depth * scale
-			new_vert.opacity = v.opacity
-
-			append(&merged_verts, new_vert)
+			append(
+				&merged_inside,
+				Phyon_Inside {
+					position = {in_transformed.x, in_transformed.y, in_transformed.z},
+					material_id = inside.material_id,
+				},
+			)
+			append(
+				&merged_outside,
+				Phyon_Outside {
+					position = {out_transformed.x, out_transformed.y, out_transformed.z},
+					material_id = outside.material_id,
+					normal = new_normal,
+				},
+			)
 		}
 
 		// Add triangle indices with offset
@@ -258,28 +300,28 @@ rebuild_volume_buffers :: proc() -> bool {
 			append(&merged_tri_indices, idx + vertex_offset)
 		}
 
-		// Add wireframe indices with offset
-		for idx in shape.wireframe_indices {
-			append(&merged_wire_indices, u16(u32(idx) + vertex_offset))
-		}
-
-		vertex_offset += u32(len(shape.phyons))
+		vertex_offset += num_phyons
+		index_offset += num_triangles * 3
 	}
 
-	// Update state buffers
-	if state.buffers.phyons != nil {
-		delete(state.buffers.phyons)
-	}
-	state.buffers.phyons = merged_verts[:]
-	state.buffers.phyon_count = u32(len(merged_verts))
+	// Update state buffers - clean up old
+	if state.buffers.inside_phyons != nil do delete(state.buffers.inside_phyons)
+	if state.buffers.outside_phyons != nil do delete(state.buffers.outside_phyons)
+	if state.buffers.volume_infos != nil do delete(state.buffers.volume_infos)
+
+	state.buffers.inside_phyons = merged_inside[:]
+	state.buffers.outside_phyons = merged_outside[:]
+	state.buffers.volume_infos = volume_infos[:]
+	state.buffers.phyon_count = u32(len(merged_inside))
 	state.buffers.face_count = u32(total_triangles)
+	state.buffers.volume_count = u32(visible_volume_count)
 
 	// Create GPU buffers
-	if !create_vertex_buffer(merged_verts[:]) {
+	if !create_split_phyon_buffers(merged_inside[:], merged_outside[:]) {
 		return false
 	}
 
-	if !create_index_buffer(merged_wire_indices[:]) {
+	if !create_volume_info_buffer(volume_infos[:]) {
 		return false
 	}
 
@@ -299,9 +341,9 @@ mark_volumes_dirty :: proc() {
 // Cleanup volume manager
 cleanup_volume_manager :: proc() {
 	for &shape in state.volume_manager.shapes {
-		if shape.phyons != nil do delete(shape.phyons)
+		if shape.inside_phyons != nil do delete(shape.inside_phyons)
+		if shape.outside_phyons != nil do delete(shape.outside_phyons)
 		if shape.triangle_indices != nil do delete(shape.triangle_indices)
-		if shape.wireframe_indices != nil do delete(shape.wireframe_indices)
 	}
 	delete(state.volume_manager.shapes)
 	delete(state.volume_manager.volumes)

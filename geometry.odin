@@ -5,7 +5,24 @@ import "core:path/filepath"
 import "vendor/tinyobj"
 
 
-// GPU vertex structure - 32 bytes aligned
+// Split phyon storage for GPU - inside and outside positions in parallel buffers
+// Same index in both buffers = same logical phyon
+
+// Inside phyon - 16 bytes (centroid position + material)
+Phyon_Inside :: struct {
+	position:    vec3, // Interior/centroid position (12 bytes)
+	material_id: u32, // Interior material ID (4 bytes)
+}
+
+// Outside phyon - 32 bytes (surface position + normal + material)
+Phyon_Outside :: struct {
+	position:    vec3, // Surface position (12 bytes)
+	material_id: u32, // Surface material ID (4 bytes)
+	normal:      vec3, // Surface normal (12 bytes)
+	_pad:        u32, // Padding for alignment (4 bytes)
+}
+
+// Legacy combined struct for compatibility during transition
 Phyon :: struct {
 	position: vec3, // Interior/centroid position (12 bytes)
 	depth:    f32, // Distance to surface (4 bytes)
@@ -95,19 +112,25 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 	centroid /= f32(num_verts)
 
-	// Build vertices with phyon attributes
-	vertices := make([]Phyon, num_verts)
-	defer delete(vertices)
+	// Build split phyon buffers
+	inside_phyons := make([]Phyon_Inside, num_verts)
+	outside_phyons := make([]Phyon_Outside, num_verts)
+	defer delete(inside_phyons)
+	defer delete(outside_phyons)
 
 	for i := 0; i < num_verts; i += 1 {
 		pos := positions[i]
-		surface := pos - centroid
+		to_surface := pos - centroid
+		normal := normalize(to_surface)
 
-		vertices[i] = Phyon {
-			position = centroid,
-			normal   = normalize(surface),
-			depth    = length(surface),
-			opacity  = 1.0,
+		inside_phyons[i] = Phyon_Inside {
+			position    = centroid,
+			material_id = 0, // Default material
+		}
+		outside_phyons[i] = Phyon_Outside {
+			position    = pos,
+			material_id = 0, // Default material
+			normal      = normal,
 		}
 	}
 
@@ -115,7 +138,7 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	log_info("Loaded OBJ:", filename, "- vertices:", num_verts, "faces:", num_tris)
 
 	free_all(context.temp_allocator)
-	return make_shape(vertices, indices[:])
+	return make_shape(inside_phyons, outside_phyons, indices[:])
 }
 
 init_geometry :: proc() -> bool {
@@ -127,9 +150,9 @@ init_geometry :: proc() -> bool {
 	return true
 }
 
-update_geometry :: proc(time: f32) {
-	// Upload updated vertices to GPU via buffers module
-	update_vertex_buffer()
+update_geometry :: proc(_time: f32) {
+	// Currently no per-frame vertex updates needed
+	// Split phyon buffers are updated on demand via rebuild_volume_buffers
 }
 
 // Geometry cleanup is handled by cleanup_buffers() in buffers.odin
