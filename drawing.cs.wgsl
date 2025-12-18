@@ -17,8 +17,6 @@ struct Phyon {
 	normal: vec3<f32>,
 	depth: f32,
 	opacity: f32,
-	face_id: u32,
-	_pad: u32,
 }
 
 struct Surface {
@@ -226,40 +224,70 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		return;
 	}
 
-	// Load rasterized data
+	// Load rasterized data: RGB = barycentrics, A = normalized face_id
 	let data = textureLoad(rasterize_texture, pixel, 0);
 
-	// Check if pixel is empty (no geometry) - alpha < 0 means clear value
-	if (data.a < 0.0) {
+	// Check if pixel is empty (alpha = 0 means no geometry)
+	if (data.a <= 0.0) {
 		return;
 	}
 
 	// Reconstruct face ID from normalized value
-	let face_id = u32(round(data.a * uniforms.face_count));
-	let surface = interp_phyon_from_face(pixel, face_id);
+	let face_id = u32(round(data.a * uniforms.face_count)) - 1u;
+	let bary = data.rgb;
 
-	// Reproject the reconstructed surface position to screen
-	let out_pixel = world_to_screen(surface.outside);
+	var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-	// Bounds check for output pixel
-	if (out_pixel.x < 0 || out_pixel.x >= dims.x || out_pixel.y < 0 || out_pixel.y >= dims.y) {
-		return;
-	}
+	let p0 = phyons[indices[face_id * 3u + 0u]];
+	let p1 = phyons[indices[face_id * 3u + 1u]];
+	let p2 = phyons[indices[face_id * 3u + 2u]];
 
-	// Compute depth at the reconstructed surface position (world space)
-	let ndc_depth = get_ndc_depth_world(surface.outside);
+	let inside = p0.position * bary.x + p1.position * bary.y + p2.position * bary.z;
+	let normal = normalize(p0.normal * bary.x + p1.normal * bary.y + p2.normal * bary.z);
+	let depth = p0.depth * bary.x + p1.depth * bary.y + p2.depth * bary.z;
+	let outside = inside + normal * depth;
 
-	// Atomic depth test - only write if we're closer
-	if (!depth_test(out_pixel, ndc_depth, dims.x)) {
-		return;
-	}
+	textureStore(output_texture, pixel, vec4<f32>(normal, 1.0));
+	// // Interpolated barycentrics from rasterizer
 
-	// Simple lighting in WORLD space
-	let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
-	let ndotl = max(dot(surface.normal, light_dir), 0.0);
-	let ambient = 0.2;
-	let diffuse = ndotl * 0.8;
-	let color = vec3<f32>(0.8, 0.6, 0.4) * (ambient + diffuse);
+	// // Get the 3 phyons for this triangle
+	// let tri = get_face_phyons(face_id);
+	// let p0 = tri[0];
+	// let p1 = tri[1];
+	// let p2 = tri[2];
 
-	textureStore(output_texture, out_pixel, vec4<f32>(color, 1.0));
+	// // Interpolate phyon attributes using barycentrics from rasterizer
+	// let inside = p0.position * bary.x + p1.position * bary.y + p2.position * bary.z;
+	// let normal = normalize(p0.normal * bary.x + p1.normal * bary.y + p2.normal * bary.z);
+	// let depth = p0.depth * bary.x + p1.depth * bary.y + p2.depth * bary.z;
+	// let outside = inside + normal * depth;
+
+	// // Transform to world space
+	// let outside_world = model_to_world(outside);
+	// let normal_world = normal_to_world(normal);
+
+	// // Reproject the reconstructed surface position to screen
+	// let out_pixel = world_to_screen(outside_world);
+
+	// // Bounds check for output pixel
+	// if (out_pixel.x < 0 || out_pixel.x >= dims.x || out_pixel.y < 0 || out_pixel.y >= dims.y) {
+	// 	return;
+	// }
+
+	// // Compute depth at the reconstructed surface position (world space)
+	// let ndc_depth = get_ndc_depth_world(outside_world);
+
+	// // Atomic depth test - only write if we're closer
+	// if (!depth_test(out_pixel, ndc_depth, dims.x)) {
+	// 	return;
+	// }
+
+	// // Simple lighting in WORLD space
+	// let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+	// let ndotl = max(dot(normal_world, light_dir), 0.0);
+	// let ambient = 0.2;
+	// let diffuse = ndotl * 0.8;
+	// let color = vec3<f32>(0.8, 0.6, 0.4) * (ambient + diffuse);
+
+	// textureStore(output_texture, out_pixel, vec4<f32>(color, 1.0));
 }

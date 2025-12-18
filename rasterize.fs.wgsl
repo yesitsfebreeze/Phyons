@@ -26,7 +26,10 @@ struct FragmentOutput {
 fn fs_main(in: FragmentInput) -> FragmentOutput {
 	var out: FragmentOutput;
 
-	out.color = vec4<f32>(in.barycentrics, f32(in.idx) / uniforms.face_count);
+	// RGB = barycentrics, A = normalized face_id for compute pass
+	let face_id = in.idx / 3u;
+	let normalized_id = f32(face_id + 1u) / uniforms.face_count;
+	out.color = vec4<f32>(in.barycentrics, normalized_id);
 
 	return out;
 }
