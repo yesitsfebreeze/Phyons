@@ -4,6 +4,7 @@ struct Uniforms {
 	time: f32,
 	screen_width: f32,
 	screen_height: f32,
+	triangle_count: f32,
 }
 
 @group(0) @binding(0)

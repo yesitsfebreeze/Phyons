@@ -52,14 +52,14 @@ ensure_depth_texture :: proc() -> bool {
 		&depth_view_desc,
 	)
 
-	// Vertex indices texture (RGBA32Uint - stores 3 vertex indices per pixel in RGB)
+	// Face ID texture (RGBA32Float - stores barycentric coords in RGB, triangle ID in A)
 	face_id_desc := wgpu.TextureDescriptor {
-		label         = "Vertex Indices Texture",
+		label         = "Face ID Texture",
 		size          = {width, height, 1},
 		mipLevelCount = 1,
 		sampleCount   = 1,
 		dimension     = ._2D,
-		format        = .RGBA32Uint,
+		format        = .RGBA32Float,
 		usage         = {.RenderAttachment, .TextureBinding},
 	}
 	state.rendering.face_id_texture = wgpu.DeviceCreateTexture(state.gapi.device, &face_id_desc)
@@ -69,7 +69,7 @@ ensure_depth_texture :: proc() -> bool {
 	}
 
 	face_id_view_desc := wgpu.TextureViewDescriptor {
-		format          = .RGBA32Uint,
+		format          = .RGBA32Float,
 		dimension       = ._2D,
 		mipLevelCount   = 1,
 		arrayLayerCount = 1,
@@ -153,11 +153,12 @@ render_frame :: proc() {
 	view_proj := proj * view_matrix
 
 	uniforms := Uniforms {
-		view_proj     = view_proj,
-		model         = model,
-		time          = state.elapsed,
-		screen_width  = f32(state.gapi.surface_config.width),
-		screen_height = f32(state.gapi.surface_config.height),
+		view_proj      = view_proj,
+		model          = model,
+		time           = state.elapsed,
+		screen_width   = f32(state.gapi.surface_config.width),
+		screen_height  = f32(state.gapi.surface_config.height),
+		triangle_count = f32(state.buffers.triangle_index_count / 3),
 	}
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
@@ -178,13 +179,13 @@ render_frame :: proc() {
 	// Pass 1: Geometry Pass - Rasterize face IDs
 	// ==========================================================================
 	{
-		// Render to vertex indices texture (RGBA32Uint)
+		// Render to face ID texture (RGBA32Float - barycentric RGB, triangle ID in A)
 		face_id_attachment := wgpu.RenderPassColorAttachment {
 			view       = state.rendering.face_id_texture_view,
 			depthSlice = wgpu.DEPTH_SLICE_UNDEFINED,
 			loadOp     = .Clear,
 			storeOp    = .Store,
-			clearValue = {0, 0, 0, 0}, // A=0 means no geometry
+			clearValue = {0, 0, 0, -1}, // A=-1 means no geometry
 		}
 
 		depth_attachment := wgpu.RenderPassDepthStencilAttachment {

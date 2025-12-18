@@ -75,10 +75,10 @@ State :: struct {
 
 
 Uniforms :: struct #align (16) {
-	view_proj:     mat4,
-	model:         mat4,
-	time:          f32,
-	screen_width:  f32,
-	screen_height: f32,
-	_pad:          f32,
+	view_proj:      mat4,
+	model:          mat4,
+	time:           f32,
+	screen_width:   f32,
+	screen_height:  f32,
+	triangle_count: f32,
 }

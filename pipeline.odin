@@ -89,7 +89,7 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	color_target := wgpu.ColorTargetState {
-		format    = .RGBA32Uint, // Output vertex indices as RGB uint
+		format    = .RGBA32Float, // Output barycentric (RGB) + triangle ID (A)
 		writeMask = wgpu.ColorWriteMaskFlags_All,
 	}
 
@@ -136,11 +136,11 @@ init_pipeline :: proc() -> bool {
 	drawing_bind_entries := [5]wgpu.BindGroupLayoutEntry {
 		// Uniforms
 		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
-		// Face ID texture (read)
+		// Face ID texture (read) - RGBA32Float with barycentric + triangle ID
 		{
 			binding = 1,
 			visibility = {.Compute},
-			texture = {sampleType = .Uint, viewDimension = ._2D},
+			texture = {sampleType = .UnfilterableFloat, viewDimension = ._2D},
 		},
 		// Phyon buffer (read)
 		{binding = 2, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},

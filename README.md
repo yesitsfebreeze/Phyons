@@ -66,7 +66,3 @@ The final framebuffer is reconstructed in a later pass by shading from the store
 
 
 
-
-
-Steps: 
-display evaluated depth buffer
