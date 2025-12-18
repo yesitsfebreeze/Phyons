@@ -29,10 +29,15 @@ Vertex → rasterize pass -> depth pass → G-buffers (normal/material/distance)
 ## Build & Run
 
 ```bash
-odin run .    # Build and run (task "build" in VS Code)
+odin run .    # Build and run in one command
 ```
 
-No external dependencies beyond Odin's vendor packages (`glfw`, `wgpu`).
+Do not cd into subdirectories; run from project root.
+
+**IMPORTANT**: When running terminal commands, the first character is sometimes cut off. Add a leading space before commands to work around this:
+```bash
+ odin run .   # Note the leading space
+```
 
 ## Code Conventions
 

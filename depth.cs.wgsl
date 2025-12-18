@@ -1,4 +1,4 @@
-// Compute shader for processing face IDs into depth/opacity information
+// Compute shader for processing rasterized data into final output
 
 struct Uniforms {
 	view_proj: mat4x4<f32>,
@@ -13,13 +13,15 @@ struct Phyon {
 	normal: vec3<f32>,
 	depth: f32,
 	opacity: f32,
+	triangle_id: u32,
+	vertex_in_tri: u32,
 }
 
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
 @group(0) @binding(1)
-var face_id_texture: texture_2d<u32>;
+var rasterize_texture: texture_2d<u32>;
 
 @group(0) @binding(2)
 var<storage, read> phyons: array<Phyon>;
@@ -29,6 +31,30 @@ var<storage, read> indices: array<u32>;
 
 @group(0) @binding(4)
 var output_texture: texture_storage_2d<rgba32float, write>;
+
+// Unpack a u32 into a float [0,1]
+fn unpack_unorm(v: u32) -> f32 {
+	return f32(v) / 65535.0;
+}
+
+// Get the three vertices of a triangle from the index buffer
+fn get_triangle_vertices(triangle_id: u32) -> array<Phyon, 3> {
+	let base_idx = triangle_id * 3u;
+	let i0 = indices[base_idx + 0u];
+	let i1 = indices[base_idx + 1u];
+	let i2 = indices[base_idx + 2u];
+	return array<Phyon, 3>(phyons[i0], phyons[i1], phyons[i2]);
+}
+
+// Interpolate normal using barycentric coordinates
+fn interpolate_normal(verts: array<Phyon, 3>, bary: vec3<f32>) -> vec3<f32> {
+	return normalize(verts[0].normal * bary.x + verts[1].normal * bary.y + verts[2].normal * bary.z);
+}
+
+// Interpolate depth using barycentric coordinates
+fn interpolate_depth(verts: array<Phyon, 3>, bary: vec3<f32>) -> f32 {
+	return verts[0].depth * bary.x + verts[1].depth * bary.y + verts[2].depth * bary.z;
+}
 
 @compute @workgroup_size(8, 8, 1)
 fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -40,52 +66,42 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		return;
 	}
 
-	// Read face ID from the rasterization pass
-	// Face ID is stored in R channel, 0xFFFFFFFF means no face
-	let face_id = textureLoad(face_id_texture, pixel, 0).r;
+	// Read data from rasterization pass
+	// R = triangle_id, G = packed barycentric coords, A = 1 if valid pixel
+	let tex_data = textureLoad(rasterize_texture, pixel, 0);
 
-	// No face at this pixel - write clear values
-	if (face_id == 0xFFFFFFFFu) {
-		textureStore(output_texture, pixel, vec4<f32>(1.0, 0.0, 0.0, 0.0));
+	// No geometry - clear background
+	if (tex_data.a == 0u) {
+		textureStore(output_texture, pixel, vec4<f32>(0.1, 0.1, 0.15, 1.0));
 		return;
 	}
 
-	// Get the three vertex indices for this face
-	let base_idx = face_id * 3u;
-	let i0 = indices[base_idx + 0u];
-	let i1 = indices[base_idx + 1u];
-	let i2 = indices[base_idx + 2u];
+	// Unpack triangle ID and barycentric coordinates
+	let triangle_id = tex_data.r;
+	let bary_packed = tex_data.g;
+	let bary_x = unpack_unorm(bary_packed >> 16u);
+	let bary_y = unpack_unorm(bary_packed & 0xFFFFu);
+	let bary_z = 1.0 - bary_x - bary_y;
+	let bary = vec3<f32>(bary_x, bary_y, bary_z);
 
-	// Get the three phyons (vertices) for this face
-	let p0 = phyons[i0];
-	let p1 = phyons[i1];
-	let p2 = phyons[i2];
+	// Get the three vertices of this triangle
+	let verts = get_triangle_vertices(triangle_id);
 
-	// Average the properties across the face
-	let avg_depth = (p0.depth + p1.depth + p2.depth) / 3.0;
-	let avg_opacity = (p0.opacity + p1.opacity + p2.opacity) / 3.0;
+	// Interpolate normal at hit point
+	let hit_normal = interpolate_normal(verts, bary);
 
-	// Compute depth points in world space (inside + normal * depth)
-	let w_pos0 = (uniforms.model * vec4<f32>(p0.position, 1.0)).xyz;
-	let w_pos1 = (uniforms.model * vec4<f32>(p1.position, 1.0)).xyz;
-	let w_pos2 = (uniforms.model * vec4<f32>(p2.position, 1.0)).xyz;
+	// Interpolate depth at hit point
+	let hit_depth = interpolate_depth(verts, bary);
 
-	let w_norm0 = normalize((uniforms.model * vec4<f32>(p0.normal, 0.0)).xyz);
-	let w_norm1 = normalize((uniforms.model * vec4<f32>(p1.normal, 0.0)).xyz);
-	let w_norm2 = normalize((uniforms.model * vec4<f32>(p2.normal, 0.0)).xyz);
+	// Simple lighting using interpolated normal
+	let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+	let ndotl = max(dot(hit_normal, light_dir), 0.0);
+	let ambient = 0.2;
+	let diffuse = ndotl * 0.8;
 
-	// Average depth point position
-	let avg_depth_point = (w_pos0 + w_norm0 * p0.depth + w_pos1 + w_norm1 * p1.depth + w_pos2 + w_norm2 * p2.depth) / 3.0;
+	// Visualize depth with lighting
+	let depth_vis = clamp(hit_depth, 0.0, 1.0);
+	let color = vec3<f32>(depth_vis) * (ambient + diffuse);
 
-	// Project to get depth value
-	let clip = uniforms.view_proj * vec4<f32>(avg_depth_point, 1.0);
-	let ndc_z = clip.z / clip.w;
-	let depth_value = ndc_z * 0.5 + 0.5;
-
-	// Write output:
-	// R = depth from camera
-	// G = depth value (same for now, could track max across frames)
-	// B = opacity
-	// A = 1.0 (valid pixel)
-	textureStore(output_texture, pixel, vec4<f32>(depth_value, depth_value, avg_opacity, 1.0));
+	textureStore(output_texture, pixel, vec4<f32>(color, 1.0));
 }

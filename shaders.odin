@@ -9,8 +9,8 @@ _ :: strings
 
 // Compile-time flag: use -define:EMBED_SHADERS=true for release builds
 EMBED_SHADERS :: #config(EMBED_SHADERS, false)
-// Shader directory relative to executable (bin/)
-DEV_SHADER_DIR :: "../"
+// Shader directory relative to working directory (project root when using odin run .)
+DEV_SHADER_DIR :: "./"
 
 ShadersState :: struct {
 	modules: map[string]wgpu.ShaderModule,
@@ -23,12 +23,16 @@ ShaderIndex :: enum {
 	RASTERIZE_VS,
 	RASTERIZE_FS,
 	DEPTH_CS,
+	PRESENT_VS,
+	PRESENT_FS,
 }
 
 SHADER_NAMES := [ShaderIndex]string {
 	.RASTERIZE_VS = "rasterize.vs",
 	.RASTERIZE_FS = "rasterize.fs",
 	.DEPTH_CS     = "depth.cs",
+	.PRESENT_VS   = "present.vs",
+	.PRESENT_FS   = "present.fs",
 }
 
 // Embedded shader data (only included in release builds)
@@ -36,8 +40,10 @@ when EMBED_SHADERS {
 	@(private = "file")
 	EMBEDDED_SHADERS := [ShaderIndex]string {
 		.RASTERIZE_VS = #load("rasterize.vs.wgsl", string),
-		.RASTERIZ_FS  = #load("rasterize.fs.wgsl", string),
+		.RASTERIZE_FS = #load("rasterize.fs.wgsl", string),
 		.DEPTH_CS     = #load("depth.cs.wgsl", string),
+		.PRESENT_VS   = #load("present.vs.wgsl", string),
+		.PRESENT_FS   = #load("present.fs.wgsl", string),
 	}
 }
 

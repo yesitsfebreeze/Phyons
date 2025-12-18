@@ -10,31 +10,41 @@ struct Uniforms {
 var<uniform> uniforms: Uniforms;
 
 struct VertexInput {
-	@builtin(vertex_index) vertex_index: u32,
 	@location(0) position: vec3<f32>,
 	@location(1) normal: vec3<f32>,
 	@location(2) depth: f32,
 	@location(3) opacity: f32,
+	@location(4) triangle_id: u32,
+	@location(5) vertex_in_tri: u32,
 }
 
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
-	@location(0) @interpolate(flat) face_id: u32,
+	@location(0) @interpolate(flat) triangle_id: u32,
+	@location(1) bary: vec3<f32>,  // Barycentric coordinates (will be interpolated)
 }
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 
-	// Compute surface position (position + normal * depth)
-	let surface = in.position + in.normal * (in.depth * 0.25);
+	// Reconstruct surface position from centroid + normal * depth
+	let surface_pos = in.position + in.normal * in.depth;
 
-	// Transform to world space then clip space
-	let w_surface = (uniforms.model * vec4<f32>(surface, 1.0)).xyz;
-	out.position = uniforms.view_proj * vec4<f32>(w_surface, 1.0);
+	// Transform position to clip space
+	let world_pos = (uniforms.model * vec4<f32>(surface_pos, 1.0)).xyz;
+	out.position = uniforms.view_proj * vec4<f32>(world_pos, 1.0);
 
-	// Face ID = vertex_index / 3 (each triangle has 3 vertices)
-	out.face_id = in.vertex_index / 3u;
+	// Triangle ID from vertex attribute
+	out.triangle_id = in.triangle_id;
+
+	// Barycentric coordinates: each vertex of a triangle gets (1,0,0), (0,1,0), or (0,0,1)
+	// The rasterizer will interpolate these across the triangle surface
+	out.bary = vec3<f32>(
+		f32(in.vertex_in_tri == 0u),
+		f32(in.vertex_in_tri == 1u),
+		f32(in.vertex_in_tri == 2u)
+	);
 
 	return out;
 }

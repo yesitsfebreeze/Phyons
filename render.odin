@@ -52,24 +52,24 @@ ensure_depth_texture :: proc() -> bool {
 		&depth_view_desc,
 	)
 
-	// Face ID texture (R32Uint - stores face index per pixel)
+	// Vertex indices texture (RGBA32Uint - stores 3 vertex indices per pixel in RGB)
 	face_id_desc := wgpu.TextureDescriptor {
-		label         = "Face ID Texture",
+		label         = "Vertex Indices Texture",
 		size          = {width, height, 1},
 		mipLevelCount = 1,
 		sampleCount   = 1,
 		dimension     = ._2D,
-		format        = .R32Uint,
+		format        = .RGBA32Uint,
 		usage         = {.RenderAttachment, .TextureBinding},
 	}
 	state.rendering.face_id_texture = wgpu.DeviceCreateTexture(state.gapi.device, &face_id_desc)
 	if state.rendering.face_id_texture == nil {
-		log_err("Failed to create face ID texture")
+		log_err("Failed to create vertex indices texture")
 		return false
 	}
 
 	face_id_view_desc := wgpu.TextureViewDescriptor {
-		format          = .R32Uint,
+		format          = .RGBA32Uint,
 		dimension       = ._2D,
 		mipLevelCount   = 1,
 		arrayLayerCount = 1,
@@ -112,6 +112,9 @@ ensure_depth_texture :: proc() -> bool {
 	}
 	if state.pipelines.compute_pipeline != nil {
 		recreate_compute_bind_group()
+	}
+	if state.pipelines.present_pipeline != nil {
+		recreate_present_bind_group()
 	}
 
 	return true
@@ -175,13 +178,13 @@ render_frame :: proc() {
 	// Pass 1: Geometry Pass - Rasterize face IDs
 	// ==========================================================================
 	{
-		// Render to face ID texture (R32Uint)
+		// Render to vertex indices texture (RGBA32Uint)
 		face_id_attachment := wgpu.RenderPassColorAttachment {
 			view       = state.rendering.face_id_texture_view,
 			depthSlice = wgpu.DEPTH_SLICE_UNDEFINED,
 			loadOp     = .Clear,
 			storeOp    = .Store,
-			clearValue = {0xFFFFFFFF, 0, 0, 0}, // 0xFFFFFFFF = no face
+			clearValue = {0, 0, 0, 0}, // A=0 means no geometry
 		}
 
 		depth_attachment := wgpu.RenderPassDepthStencilAttachment {
@@ -241,6 +244,34 @@ render_frame :: proc() {
 
 		wgpu.ComputePassEncoderEnd(pass)
 		wgpu.ComputePassEncoderRelease(pass)
+	}
+
+	// ==========================================================================
+	// Pass 3: Present Pass - Render depth buffer to screen
+	// ==========================================================================
+	{
+		color_attachment := wgpu.RenderPassColorAttachment {
+			view       = texture_view,
+			depthSlice = wgpu.DEPTH_SLICE_UNDEFINED,
+			loadOp     = .Clear,
+			storeOp    = .Store,
+			clearValue = {0.1, 0.1, 0.15, 1.0},
+		}
+
+		pass_desc := wgpu.RenderPassDescriptor {
+			label                = "Present Pass",
+			colorAttachmentCount = 1,
+			colorAttachments     = &color_attachment,
+		}
+
+		pass := wgpu.CommandEncoderBeginRenderPass(encoder, &pass_desc)
+
+		wgpu.RenderPassEncoderSetPipeline(pass, state.pipelines.present_pipeline)
+		wgpu.RenderPassEncoderSetBindGroup(pass, 0, state.pipelines.present_bind_group)
+		wgpu.RenderPassEncoderDraw(pass, 3, 1, 0, 0) // Fullscreen triangle
+
+		wgpu.RenderPassEncoderEnd(pass)
+		wgpu.RenderPassEncoderRelease(pass)
 	}
 
 	// Submit command buffer

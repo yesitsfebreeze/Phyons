@@ -48,6 +48,9 @@ PipelinesState :: struct {
 	// Compute pipeline (processes face IDs into depth/opacity)
 	compute_pipeline:     wgpu.ComputePipeline,
 	compute_bind_group:   wgpu.BindGroup,
+	// Present pipeline (renders output tjoomexture to screen)
+	present_pipeline:     wgpu.RenderPipeline,
+	present_bind_group:   wgpu.BindGroup,
 }
 
 
