@@ -18,21 +18,24 @@ SHADER_EXTENSION: string : ".wgsl"
 
 // Shader file definitions as name-index pairs
 ShaderIndex :: enum {
-	GEO_VS,
-	GEO_FS,
+	RASTERIZE_VS,
+	RASTERIZE_FS,
+	DEPTH_CS,
 }
 
 SHADER_NAMES := [ShaderIndex]string {
-	.GEO_VS = "geo.vs",
-	.GEO_FS = "geo.fs",
+	.RASTERIZE_VS = "rasterize.vs",
+	.RASTERIZE_FS = "rasterize.fs",
+	.DEPTH_CS     = "depth.cs",
 }
 
 // Embedded shader data (only included in release builds)
 when EMBED_SHADERS {
 	@(private = "file")
 	EMBEDDED_SHADERS := [ShaderIndex]string {
-		.GEO_VS = #load("shaders/geo.vs.wgsl", string),
-		.GEO_FS = #load("shaders/geo.fs.wgsl", string),
+		.RASTERIZE_VS = #load("rasterize.vs.wgsl", string),
+		.RASTERIZ_FS  = #load("rasterize.fs.wgsl", string),
+		.DEPTH_CS     = #load("depth.cs.wgsl", string),
 	}
 }
 
@@ -46,7 +49,7 @@ when EMBED_SHADERS {
 	load_shader_source :: proc(idx: ShaderIndex) -> (string, bool) {
 		// Debug mode: load from file for hot-reloading during development
 		name := SHADER_NAMES[idx]
-		path := strings.join({"shaders/", name, SHADER_EXTENSION}, "")
+		path := strings.join({name, SHADER_EXTENSION}, "")
 		defer delete(path)
 		data, ok := os.read_entire_file(path)
 		if !ok {
@@ -100,12 +103,12 @@ init_shaders :: proc() -> bool {
 }
 
 // Get a shader module by name
-get_shader :: proc(name: string) -> wgpu.ShaderModule {
+get_shader :: proc(name: string) -> (wgpu.ShaderModule, bool) {
 	if module, ok := state.shaders.modules[name]; ok {
-		return module
+		return module, true
 	}
 	log_info("Shader not found:", name)
-	return nil
+	return nil, false
 }
 
 cleanup_shaders :: proc() {

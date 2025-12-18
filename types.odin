@@ -27,22 +27,27 @@ BuffersState :: struct {
 }
 
 RenderingState :: struct {
-	// Depth texture
-	depth_texture:             wgpu.Texture,
-	depth_texture_view:        wgpu.TextureView,
-	// Custom depth buffer (for volume rendering)
-	custom_depth_texture:      wgpu.Texture,
-	custom_depth_texture_view: wgpu.TextureView,
+	// Depth texture (hardware z-buffer)
+	depth_texture:        wgpu.Texture,
+	depth_texture_view:   wgpu.TextureView,
+	// Face ID texture (R32Uint - stores face index per pixel)
+	face_id_texture:      wgpu.Texture,
+	face_id_texture_view: wgpu.TextureView,
+	// Output texture (RGBA32Float - computed depth/opacity)
+	output_texture:       wgpu.Texture,
+	output_texture_view:  wgpu.TextureView,
 	// Dimensions
-	depth_width:               u32,
-	depth_height:              u32,
+	depth_width:          u32,
+	depth_height:         u32,
 }
 
 PipelinesState :: struct {
-	// Render pipeline
-	geometry_pipeline:   wgpu.RenderPipeline,
-	// Bind groups
-	geometry_bind_group: wgpu.BindGroup,
+	// Render pipeline (rasterization pass - writes face IDs)
+	rasterize_pipeline:   wgpu.RenderPipeline,
+	rasterize_bind_group: wgpu.BindGroup,
+	// Compute pipeline (processes face IDs into depth/opacity)
+	compute_pipeline:     wgpu.ComputePipeline,
+	compute_bind_group:   wgpu.BindGroup,
 }
 
 

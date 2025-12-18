@@ -10,15 +10,16 @@ struct Uniforms {
 var<uniform> uniforms: Uniforms;
 
 @group(0) @binding(1)
-var custom_depth_texture: texture_storage_2d<r32float, write>;
+var custom_depth_texture: texture_storage_2d<rgba32float, write>;
 
 struct FragmentInput {
 	@builtin(position) frag_coord: vec4<f32>,
-	@location(0) world_normal: vec3<f32>,
+	@location(0) w_normal: vec3<f32>,
 	@location(1) depth: f32,
 	@location(2) depth_point_ndc: vec3<f32>,
-	@location(3) inside_world: vec3<f32>,
-	@location(4) surface_world: vec3<f32>,
+	@location(3) w_inside: vec3<f32>,
+	@location(4) w_surface: vec3<f32>,
+	@location(5) opacity: f32,
 }
 
 struct FragmentOutput {
@@ -37,11 +38,16 @@ fn fs_main(in: FragmentInput) -> FragmentOutput {
 	let pixel_x = i32(depth_screen_x);
 	let pixel_y = i32(depth_screen_y);
 
-	// Check bounds and write 1.0 to the custom depth buffer at that location
+	// Check bounds and write to the custom depth buffer at that location
 	if (pixel_x >= 0 && pixel_x < i32(uniforms.screen_width) && pixel_y >= 0 && pixel_y < i32(uniforms.screen_height)) {
-		// Write the depth value (normalized 0-1 from NDC z)
+		// Compute the depth value (normalized 0-1 from NDC z)
 		let depth_value = in.depth_point_ndc.z * 0.5 + 0.5;
-		textureStore(custom_depth_texture, vec2<i32>(pixel_x, pixel_y), vec4<f32>(depth_value, 0.0, 0.0, 1.0));
+
+		// Write to custom depth texture (write-only, no read-modify-write support on this format)
+		// R = current depth
+		// G = depth value (will be max if this is the only/last writer)
+		// B = fragment opacity
+		textureStore(custom_depth_texture, vec2<i32>(pixel_x, pixel_y), vec4<f32>(depth_value, depth_value, in.opacity, 1.0));
 	}
 
 	// Output the depth visualization as the color

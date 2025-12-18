@@ -92,9 +92,11 @@ make_shape_from_positions :: proc(positions: []vec3, indices: []u32) -> ShapeId 
 
 	for i := 0; i < len(positions); i += 1 {
 		pos := positions[i]
+		ref := pos - mesh_centroid
 		vertices[i] = Phyon {
-			inside    = mesh_centroid,
-			reference = pos - mesh_centroid, // offset from center to surface
+			position = mesh_centroid,
+			normal   = normalize(ref),
+			depth    = length(ref),
 		}
 	}
 
@@ -210,7 +212,7 @@ rebuild_volume_buffers :: proc() -> bool {
 
 	// Build merged arrays
 	merged_verts := make([dynamic]Phyon, 0, total_verts)
-	merged_tri_indices := make([dynamic]u16, 0, total_tri_indices)
+	merged_tri_indices := make([dynamic]u32, 0, total_tri_indices)
 	merged_wire_indices := make([dynamic]u16, 0, total_wire_indices)
 	defer delete(merged_tri_indices)
 	defer delete(merged_wire_indices)
@@ -230,22 +232,28 @@ rebuild_volume_buffers :: proc() -> bool {
 		for v in shape.phyons {
 			new_vert := v
 
-			// Transform inside position (point - uses full transform)
-			inside4 := vec4{v.inside.x, v.inside.y, v.inside.z, 1.0}
-			transformed_inside := vol.transform * inside4
-			new_vert.inside = {transformed_inside.x, transformed_inside.y, transformed_inside.z}
+			// Transform position (point - uses full transform)
+			pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
+			transformed_pos := vol.transform * pos4
+			new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
 
-			// Transform ref vector (direction - no translation, w=0)
-			ref4 := vec4{v.reference.x, v.reference.y, v.reference.z, 0.0}
-			transformed_ref := vol.transform * ref4
-			new_vert.reference = {transformed_ref.x, transformed_ref.y, transformed_ref.z}
+			// Transform normal (direction - no translation, w=0), then renormalize
+			normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
+			transformed_normal := vol.transform * normal4
+			new_vert.normal = normalize(
+				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
+			)
+
+			// Scale depth by transform scale (approximate using normal length before normalize)
+			scale := length(vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z})
+			new_vert.depth = v.depth * scale
 
 			append(&merged_verts, new_vert)
 		}
 
 		// Add triangle indices with offset
 		for idx in shape.triangle_indices {
-			append(&merged_tri_indices, u16(idx + vertex_offset))
+			append(&merged_tri_indices, idx + vertex_offset)
 		}
 
 		// Add wireframe indices with offset

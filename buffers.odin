@@ -28,7 +28,7 @@ create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
 	vertex_buffer_desc := wgpu.BufferDescriptor {
 		label            = "Vertex Buffer",
 		size             = u64(len(vertices) * size_of(Phyon)),
-		usage            = {.Vertex, .CopyDst},
+		usage            = {.Vertex, .CopyDst, .Storage},
 		mappedAtCreation = false,
 	}
 	state.buffers.phyon_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &vertex_buffer_desc)
@@ -79,15 +79,15 @@ create_index_buffer :: proc(indices: []u16) -> bool {
 }
 
 // Create triangle index buffer (for geometry pass)
-create_triangle_index_buffer :: proc(indices: []u16) -> bool {
+create_triangle_index_buffer :: proc(indices: []u32) -> bool {
 	if state.buffers.triangle_index_buffer != nil {
 		wgpu.BufferRelease(state.buffers.triangle_index_buffer)
 	}
 
 	tri_index_buffer_desc := wgpu.BufferDescriptor {
 		label            = "Triangle Index Buffer",
-		size             = u64(len(indices) * size_of(u16)),
-		usage            = {.Index, .CopyDst},
+		size             = u64(len(indices) * size_of(u32)),
+		usage            = {.Index, .CopyDst, .Storage},
 		mappedAtCreation = false,
 	}
 	state.buffers.triangle_index_buffer = wgpu.DeviceCreateBuffer(

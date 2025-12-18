@@ -7,7 +7,8 @@ This is an **Odin-language** WebGPU renderer implementing a deferred G-buffer pi
 ## Architecture
 
 ### Rendering Pipeline (Deferred Two-Pass)
-1. **Geometry Pass** (`geo.vs.wgsl`, `geo.fs.wgsl`): Writes to G-buffers (normal, material, distance) + dual depth buffers (front/back)
+1. **Rasterize Pass** (`rasterize.vs.wgsl`, `rasterize.fs.wgsl`): Writes to G-buffers (normal, material, distance) + dual depth buffers (front/back)
+2. **Depth Pass** (`depth.cs.wgsl`): Computes depth information for thickness estimation
 2. **Shading Pass** (`shading.vs.wgsl`, `shading.fs.wgsl`): Full-screen quad reads G-buffers to compute final lighting/thickness
 
 ### Key Files by Responsibility
@@ -20,7 +21,7 @@ This is an **Odin-language** WebGPU renderer implementing a deferred G-buffer pi
 
 ### Data Flow
 ```
-Vertex → geometry pass → G-buffers (normal/material/distance) + depth_front/depth_back
+Vertex → rasterize pass -> depth pass → G-buffers (normal/material/distance) + depth_front/depth_back
                                      ↓
                         shading pass → thickness = back_depth - front_depth → final color
 ```

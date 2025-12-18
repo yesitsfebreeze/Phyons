@@ -17,13 +17,15 @@ ensure_depth_texture :: proc() -> bool {
 	// Release old resources
 	if state.rendering.depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.depth_texture_view)
 	if state.rendering.depth_texture != nil do wgpu.TextureRelease(state.rendering.depth_texture)
-	if state.rendering.custom_depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.custom_depth_texture_view)
-	if state.rendering.custom_depth_texture != nil do wgpu.TextureRelease(state.rendering.custom_depth_texture)
+	if state.rendering.face_id_texture_view != nil do wgpu.TextureViewRelease(state.rendering.face_id_texture_view)
+	if state.rendering.face_id_texture != nil do wgpu.TextureRelease(state.rendering.face_id_texture)
+	if state.rendering.output_texture_view != nil do wgpu.TextureViewRelease(state.rendering.output_texture_view)
+	if state.rendering.output_texture != nil do wgpu.TextureRelease(state.rendering.output_texture)
 
 	state.rendering.depth_width = width
 	state.rendering.depth_height = height
 
-	// Depth texture
+	// Hardware depth texture (z-buffer)
 	depth_desc := wgpu.TextureDescriptor {
 		label         = "Depth Texture",
 		size          = {width, height, 1},
@@ -50,39 +52,66 @@ ensure_depth_texture :: proc() -> bool {
 		&depth_view_desc,
 	)
 
-	// Custom depth texture (R32Float for storage)
-	custom_depth_desc := wgpu.TextureDescriptor {
-		label         = "Custom Depth Texture",
+	// Face ID texture (R32Uint - stores face index per pixel)
+	face_id_desc := wgpu.TextureDescriptor {
+		label         = "Face ID Texture",
 		size          = {width, height, 1},
 		mipLevelCount = 1,
 		sampleCount   = 1,
 		dimension     = ._2D,
-		format        = .R32Float,
-		usage         = {.StorageBinding, .TextureBinding, .CopySrc},
+		format        = .R32Uint,
+		usage         = {.RenderAttachment, .TextureBinding},
 	}
-	state.rendering.custom_depth_texture = wgpu.DeviceCreateTexture(
-		state.gapi.device,
-		&custom_depth_desc,
-	)
-	if state.rendering.custom_depth_texture == nil {
-		log_err("Failed to create custom depth texture")
+	state.rendering.face_id_texture = wgpu.DeviceCreateTexture(state.gapi.device, &face_id_desc)
+	if state.rendering.face_id_texture == nil {
+		log_err("Failed to create face ID texture")
 		return false
 	}
 
-	custom_depth_view_desc := wgpu.TextureViewDescriptor {
-		format          = .R32Float,
+	face_id_view_desc := wgpu.TextureViewDescriptor {
+		format          = .R32Uint,
 		dimension       = ._2D,
 		mipLevelCount   = 1,
 		arrayLayerCount = 1,
 	}
-	state.rendering.custom_depth_texture_view = wgpu.TextureCreateView(
-		state.rendering.custom_depth_texture,
-		&custom_depth_view_desc,
+	state.rendering.face_id_texture_view = wgpu.TextureCreateView(
+		state.rendering.face_id_texture,
+		&face_id_view_desc,
 	)
 
-	// Recreate bind group since texture view changed (only if pipeline exists)
-	if state.pipelines.geometry_pipeline != nil {
-		recreate_geometry_bind_group()
+	// Output texture (RGBA32Float - computed depth/opacity from compute pass)
+	output_desc := wgpu.TextureDescriptor {
+		label         = "Output Texture",
+		size          = {width, height, 1},
+		mipLevelCount = 1,
+		sampleCount   = 1,
+		dimension     = ._2D,
+		format        = .RGBA32Float,
+		usage         = {.StorageBinding, .TextureBinding, .CopySrc},
+	}
+	state.rendering.output_texture = wgpu.DeviceCreateTexture(state.gapi.device, &output_desc)
+	if state.rendering.output_texture == nil {
+		log_err("Failed to create output texture")
+		return false
+	}
+
+	output_view_desc := wgpu.TextureViewDescriptor {
+		format          = .RGBA32Float,
+		dimension       = ._2D,
+		mipLevelCount   = 1,
+		arrayLayerCount = 1,
+	}
+	state.rendering.output_texture_view = wgpu.TextureCreateView(
+		state.rendering.output_texture,
+		&output_view_desc,
+	)
+
+	// Recreate bind groups since texture views changed (only if pipelines exist)
+	if state.pipelines.rasterize_pipeline != nil {
+		recreate_rasterize_bind_group()
+	}
+	if state.pipelines.compute_pipeline != nil {
+		recreate_compute_bind_group()
 	}
 
 	return true
@@ -143,15 +172,16 @@ render_frame :: proc() {
 	defer wgpu.CommandEncoderRelease(encoder)
 
 	// ==========================================================================
-	// Geometry Pass - Render to swapchain
+	// Pass 1: Geometry Pass - Rasterize face IDs
 	// ==========================================================================
 	{
-		color_attachment := wgpu.RenderPassColorAttachment {
-			view       = texture_view,
+		// Render to face ID texture (R32Uint)
+		face_id_attachment := wgpu.RenderPassColorAttachment {
+			view       = state.rendering.face_id_texture_view,
 			depthSlice = wgpu.DEPTH_SLICE_UNDEFINED,
 			loadOp     = .Clear,
 			storeOp    = .Store,
-			clearValue = {0.0, 0.0, 0.0, 1.0},
+			clearValue = {0xFFFFFFFF, 0, 0, 0}, // 0xFFFFFFFF = no face
 		}
 
 		depth_attachment := wgpu.RenderPassDepthStencilAttachment {
@@ -163,16 +193,16 @@ render_frame :: proc() {
 		}
 
 		pass_desc := wgpu.RenderPassDescriptor {
-			label                  = "Geometry Pass",
+			label                  = "Face ID Pass",
 			colorAttachmentCount   = 1,
-			colorAttachments       = &color_attachment,
+			colorAttachments       = &face_id_attachment,
 			depthStencilAttachment = &depth_attachment,
 		}
 
 		pass := wgpu.CommandEncoderBeginRenderPass(encoder, &pass_desc)
 
-		wgpu.RenderPassEncoderSetPipeline(pass, state.pipelines.geometry_pipeline)
-		wgpu.RenderPassEncoderSetBindGroup(pass, 0, state.pipelines.geometry_bind_group)
+		wgpu.RenderPassEncoderSetPipeline(pass, state.pipelines.rasterize_pipeline)
+		wgpu.RenderPassEncoderSetBindGroup(pass, 0, state.pipelines.rasterize_bind_group)
 		wgpu.RenderPassEncoderSetVertexBuffer(
 			pass,
 			0,
@@ -183,7 +213,7 @@ render_frame :: proc() {
 		wgpu.RenderPassEncoderSetIndexBuffer(
 			pass,
 			state.buffers.triangle_index_buffer,
-			.Uint16,
+			.Uint32,
 			0,
 			wgpu.WHOLE_SIZE,
 		)
@@ -191,6 +221,26 @@ render_frame :: proc() {
 
 		wgpu.RenderPassEncoderEnd(pass)
 		wgpu.RenderPassEncoderRelease(pass)
+	}
+
+	// ==========================================================================
+	// Pass 2: Compute Pass - Process face IDs into depth/opacity
+	// ==========================================================================
+	{
+		pass := wgpu.CommandEncoderBeginComputePass(encoder, nil)
+
+		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.compute_pipeline)
+		wgpu.ComputePassEncoderSetBindGroup(pass, 0, state.pipelines.compute_bind_group)
+
+		// Dispatch workgroups (8x8 threads per group)
+		width := state.gapi.surface_config.width
+		height := state.gapi.surface_config.height
+		workgroups_x := (width + 7) / 8
+		workgroups_y := (height + 7) / 8
+		wgpu.ComputePassEncoderDispatchWorkgroups(pass, workgroups_x, workgroups_y, 1)
+
+		wgpu.ComputePassEncoderEnd(pass)
+		wgpu.ComputePassEncoderRelease(pass)
 	}
 
 	// Submit command buffer
@@ -203,8 +253,10 @@ render_frame :: proc() {
 }
 
 cleanup_rendering :: proc() {
-	if state.rendering.custom_depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.custom_depth_texture_view)
-	if state.rendering.custom_depth_texture != nil do wgpu.TextureRelease(state.rendering.custom_depth_texture)
+	if state.rendering.output_texture_view != nil do wgpu.TextureViewRelease(state.rendering.output_texture_view)
+	if state.rendering.output_texture != nil do wgpu.TextureRelease(state.rendering.output_texture)
+	if state.rendering.face_id_texture_view != nil do wgpu.TextureViewRelease(state.rendering.face_id_texture_view)
+	if state.rendering.face_id_texture != nil do wgpu.TextureRelease(state.rendering.face_id_texture)
 	if state.rendering.depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.depth_texture_view)
 	if state.rendering.depth_texture != nil do wgpu.TextureRelease(state.rendering.depth_texture)
 }

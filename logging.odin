@@ -2,11 +2,13 @@ package phyons
 
 import "core:log"
 import "core:mem"
+import "core:os"
 
 // Force mem import to be used even when USE_TRACKING_ALLOCATOR is false
 _ :: mem
 
 USE_TRACKING_ALLOCATOR :: #config(USE_TRACKING_ALLOCATOR, ODIN_DEBUG)
+LOG_FILE_PATH :: #config(LOG_FILE_PATH, "phyons.log")
 
 log_debug :: proc(args: ..any, location := #caller_location) {
 	when ODIN_DEBUG {
@@ -57,8 +59,37 @@ logf_fatal :: proc(fmt_str: string, args: ..any, location := #caller_location) {
 @(private = "file")
 tracking_allocator: mem.Tracking_Allocator
 
+@(private = "file")
+console_logger: log.Logger
+
+@(private = "file")
+file_logger: log.Logger
+
+@(private = "file")
+multi_logger: log.Logger
+
+@(private = "file")
+log_file_handle: os.Handle = os.INVALID_HANDLE
+
 init_logging :: proc() {
-	context.logger = log.create_console_logger()
+	// Create console logger
+	console_logger = log.create_console_logger()
+
+	// Create file logger
+	log_file_handle, _ = os.open(
+		LOG_FILE_PATH,
+		os.O_WRONLY | os.O_CREATE | os.O_TRUNC,
+		0o644,
+	)
+	if log_file_handle != os.INVALID_HANDLE {
+		file_logger = log.create_file_logger(log_file_handle)
+		// Create multi-logger combining both
+		multi_logger = log.create_multi_logger(console_logger, file_logger)
+		context.logger = multi_logger
+	} else {
+		// Fall back to console only if file creation fails
+		context.logger = console_logger
+	}
 
 	when USE_TRACKING_ALLOCATOR {
 		default_allocator := context.allocator
@@ -84,5 +115,12 @@ cleanup_logging :: proc() {
 		mem.tracking_allocator_destroy(&tracking_allocator)
 	}
 
-	log.destroy_console_logger(context.logger)
+	// Destroy multi-logger if file was opened
+	if log_file_handle != os.INVALID_HANDLE {
+		log.destroy_multi_logger(multi_logger)
+		log.destroy_file_logger(file_logger)
+		log.destroy_console_logger(console_logger)
+	} else {
+		log.destroy_console_logger(console_logger)
+	}
 }

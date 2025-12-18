@@ -13,6 +13,7 @@
 				"-vet", // Run static analysis (finds unused vars, dead code, etc.
 				"-warnings-as-errors", // Treat warnings as errors to keep code clean
 				"-out:bin/phyons.exe", // Specify output binary location
+				"-debug"
 			],
 			"options": {
 				"cwd": "${workspaceRoot}"

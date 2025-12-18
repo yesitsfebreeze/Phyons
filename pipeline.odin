@@ -2,40 +2,46 @@ package phyons
 
 import "vendor:wgpu"
 
-// Store bind group layout for recreation
+// Store bind group layouts for recreation
 @(private = "file")
-geometry_bind_group_layout: wgpu.BindGroupLayout
+rasterize_bind_group_layout: wgpu.BindGroupLayout
+@(private = "file")
+compute_bind_group_layout: wgpu.BindGroupLayout
+
+// shaders
+@(private = "file")
+rasterize_vertex_shader: wgpu.ShaderModule
+@(private = "file")
+rasterize_fragment_shader: wgpu.ShaderModule
+@(private = "file")
+compute_shader: wgpu.ShaderModule
 
 init_pipeline :: proc() -> bool {
 	// Get shader modules
-	geom_vertex_shader := get_shader("geo.vs")
-	geom_fragment_shader := get_shader("geo.fs")
 
-	if geom_vertex_shader == nil || geom_fragment_shader == nil {
-		log_err("Failed to get required shader modules")
-		return false
-	}
+	err := false
+
+	rasterize_vertex_shader, err = get_shader("rasterize.vs")
+	rasterize_fragment_shader, err = get_shader("rasterize.fs")
+	compute_shader, err = get_shader("depth.cs")
+
+	if err do return false
 
 	// ==========================================================================
-	// Create bind group layout (uniform buffer + storage texture)
+	// Create rasterize bind group layout (uniform buffer only - no storage texture)
 	// ==========================================================================
 
-	bind_layout_entries := [2]wgpu.BindGroupLayoutEntry {
+	rasterize_bind_layout_entries := [1]wgpu.BindGroupLayoutEntry {
 		{binding = 0, visibility = {.Vertex, .Fragment}, buffer = {type = .Uniform}},
-		{
-			binding = 1,
-			visibility = {.Fragment},
-			storageTexture = {access = .WriteOnly, format = .R32Float, viewDimension = ._2D},
-		},
 	}
-	bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
-		label      = "Geometry Bind Group Layout",
-		entryCount = len(bind_layout_entries),
-		entries    = &bind_layout_entries[0],
+	rasterize_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
+		label      = "Rasterize Bind Group Layout",
+		entryCount = len(rasterize_bind_layout_entries),
+		entries    = &rasterize_bind_layout_entries[0],
 	}
-	geometry_bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
+	rasterize_bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
 		state.gapi.device,
-		&bind_layout_desc,
+		&rasterize_bind_layout_desc,
 	)
 
 	// ==========================================================================
@@ -45,7 +51,7 @@ init_pipeline :: proc() -> bool {
 	pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
 		label                = "Geometry Pipeline Layout",
 		bindGroupLayoutCount = 1,
-		bindGroupLayouts     = &geometry_bind_group_layout,
+		bindGroupLayouts     = &rasterize_bind_group_layout,
 	}
 	pipeline_layout := wgpu.DeviceCreatePipelineLayout(state.gapi.device, &pipeline_layout_desc)
 	defer wgpu.PipelineLayoutRelease(pipeline_layout)
@@ -55,8 +61,10 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	vertex_attributes := []wgpu.VertexAttribute {
-		{format = .Float32x3, offset = 0, shaderLocation = 0}, // inside
-		{format = .Float32x3, offset = 12, shaderLocation = 1}, // ref
+		{format = .Float32x3, offset = 0, shaderLocation = 0}, // position
+		{format = .Float32x3, offset = 12, shaderLocation = 1}, // normal
+		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
+		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
@@ -67,16 +75,16 @@ init_pipeline :: proc() -> bool {
 	}
 
 	// ==========================================================================
-	// Create Geometry Pipeline
+	// Create Rasterize Pipeline
 	// ==========================================================================
 
 	color_target := wgpu.ColorTargetState {
-		format    = state.gapi.surface_config.format,
+		format    = .R32Uint, // Output face ID as uint
 		writeMask = wgpu.ColorWriteMaskFlags_All,
 	}
 
 	fragment_state := wgpu.FragmentState {
-		module      = geom_fragment_shader,
+		module      = rasterize_fragment_shader,
 		entryPoint  = "fs_main",
 		targetCount = 1,
 		targets     = &color_target,
@@ -89,10 +97,10 @@ init_pipeline :: proc() -> bool {
 	}
 
 	pipeline_desc := wgpu.RenderPipelineDescriptor {
-		label = "Geometry Pipeline",
+		label = "Rasterize Pipeline",
 		layout = pipeline_layout,
 		vertex = {
-			module = geom_vertex_shader,
+			module = rasterize_vertex_shader,
 			entryPoint = "vs_main",
 			bufferCount = 1,
 			buffers = &vertex_buffer_layout,
@@ -103,53 +111,155 @@ init_pipeline :: proc() -> bool {
 		multisample = {count = 1, mask = ~u32(0)},
 	}
 
-	state.pipelines.geometry_pipeline = wgpu.DeviceCreateRenderPipeline(
+	state.pipelines.rasterize_pipeline = wgpu.DeviceCreateRenderPipeline(
 		state.gapi.device,
 		&pipeline_desc,
 	)
-	if state.pipelines.geometry_pipeline == nil {
-		log_err("Failed to create geometry pipeline")
+	if state.pipelines.rasterize_pipeline == nil {
+		log_err("Failed to create rasterize pipeline")
 		return false
 	}
 
-	// Create initial bind group (custom depth texture should exist by now)
-	recreate_geometry_bind_group()
-	if state.pipelines.geometry_bind_group == nil {
-		log_err("Failed to create geometry bind group")
+	// ==========================================================================
+	// Create Compute Bind Group Layout
+	// ==========================================================================
+	compute_bind_entries := [5]wgpu.BindGroupLayoutEntry {
+		// Uniforms
+		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
+		// Face ID texture (read)
+		{
+			binding = 1,
+			visibility = {.Compute},
+			texture = {sampleType = .Uint, viewDimension = ._2D},
+		},
+		// Phyon buffer (read)
+		{binding = 2, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
+		// Index buffer (read)
+		{binding = 3, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
+		// Output texture (write)
+		{
+			binding = 4,
+			visibility = {.Compute},
+			storageTexture = {access = .WriteOnly, format = .RGBA32Float, viewDimension = ._2D},
+		},
+	}
+	compute_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
+		label      = "Compute Bind Group Layout",
+		entryCount = len(compute_bind_entries),
+		entries    = &compute_bind_entries[0],
+	}
+	compute_bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
+		state.gapi.device,
+		&compute_bind_layout_desc,
+	)
+
+	// ==========================================================================
+	// Create Compute Pipeline Layout
+	// ==========================================================================
+	compute_pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
+		label                = "Compute Pipeline Layout",
+		bindGroupLayoutCount = 1,
+		bindGroupLayouts     = &compute_bind_group_layout,
+	}
+	compute_pipeline_layout := wgpu.DeviceCreatePipelineLayout(
+		state.gapi.device,
+		&compute_pipeline_layout_desc,
+	)
+	defer wgpu.PipelineLayoutRelease(compute_pipeline_layout)
+
+	// ==========================================================================
+	// Create Compute Pipeline
+	// ==========================================================================
+	compute_desc := wgpu.ComputePipelineDescriptor {
+		label = "Depth Compute Pipeline",
+		layout = compute_pipeline_layout,
+		compute = {module = compute_shader, entryPoint = "cs_main"},
+	}
+	state.pipelines.compute_pipeline = wgpu.DeviceCreateComputePipeline(
+		state.gapi.device,
+		&compute_desc,
+	)
+	if state.pipelines.compute_pipeline == nil {
+		log_err("Failed to create compute pipeline")
+		return false
+	}
+
+	// Create initial bind groups
+	recreate_rasterize_bind_group()
+	if state.pipelines.rasterize_bind_group == nil {
+		log_err("Failed to create rasterize bind group")
+		return false
+	}
+
+	recreate_compute_bind_group()
+	if state.pipelines.compute_bind_group == nil {
+		log_err("Failed to create compute bind group")
 		return false
 	}
 
 	return true
 }
 
-// Recreate bind group when custom depth texture changes (on resize)
-recreate_geometry_bind_group :: proc() {
+// Recreate rasterize bind group (on resize)
+recreate_rasterize_bind_group :: proc() {
 	// Release old bind group
-	if state.pipelines.geometry_bind_group != nil {
-		wgpu.BindGroupRelease(state.pipelines.geometry_bind_group)
-		state.pipelines.geometry_bind_group = nil
+	if state.pipelines.rasterize_bind_group != nil {
+		wgpu.BindGroupRelease(state.pipelines.rasterize_bind_group)
+		state.pipelines.rasterize_bind_group = nil
 	}
 
-	// Need custom depth texture view to exist
-	if state.rendering.custom_depth_texture_view == nil {
-		return
-	}
-
-	bind_entries := [2]wgpu.BindGroupEntry {
+	bind_entries := [1]wgpu.BindGroupEntry {
 		{binding = 0, buffer = state.buffers.uniform_buffer, size = size_of(Uniforms)},
-		{binding = 1, textureView = state.rendering.custom_depth_texture_view},
 	}
 	bind_desc := wgpu.BindGroupDescriptor {
-		label      = "Geometry Bind Group",
-		layout     = geometry_bind_group_layout,
+		label      = "Rasterize Bind Group",
+		layout     = rasterize_bind_group_layout,
 		entryCount = len(bind_entries),
 		entries    = &bind_entries[0],
 	}
-	state.pipelines.geometry_bind_group = wgpu.DeviceCreateBindGroup(state.gapi.device, &bind_desc)
+	state.pipelines.rasterize_bind_group = wgpu.DeviceCreateBindGroup(
+		state.gapi.device,
+		&bind_desc,
+	)
+}
+
+// Recreate compute bind group (on resize)
+recreate_compute_bind_group :: proc() {
+	// Release old bind group
+	if state.pipelines.compute_bind_group != nil {
+		wgpu.BindGroupRelease(state.pipelines.compute_bind_group)
+		state.pipelines.compute_bind_group = nil
+	}
+
+	// Need all textures and buffers to exist
+	if state.rendering.face_id_texture_view == nil ||
+	   state.rendering.output_texture_view == nil ||
+	   state.buffers.phyon_buffer == nil ||
+	   state.buffers.triangle_index_buffer == nil {
+		return
+	}
+
+	bind_entries := [5]wgpu.BindGroupEntry {
+		{binding = 0, buffer = state.buffers.uniform_buffer, size = size_of(Uniforms)},
+		{binding = 1, textureView = state.rendering.face_id_texture_view},
+		{binding = 2, buffer = state.buffers.phyon_buffer, size = wgpu.WHOLE_SIZE},
+		{binding = 3, buffer = state.buffers.triangle_index_buffer, size = wgpu.WHOLE_SIZE},
+		{binding = 4, textureView = state.rendering.output_texture_view},
+	}
+	bind_desc := wgpu.BindGroupDescriptor {
+		label      = "Compute Bind Group",
+		layout     = compute_bind_group_layout,
+		entryCount = len(bind_entries),
+		entries    = &bind_entries[0],
+	}
+	state.pipelines.compute_bind_group = wgpu.DeviceCreateBindGroup(state.gapi.device, &bind_desc)
 }
 
 cleanup_pipelines :: proc() {
-	if state.pipelines.geometry_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.geometry_bind_group)
-	if state.pipelines.geometry_pipeline != nil do wgpu.RenderPipelineRelease(state.pipelines.geometry_pipeline)
-	if geometry_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(geometry_bind_group_layout)
+	if state.pipelines.compute_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.compute_bind_group)
+	if state.pipelines.compute_pipeline != nil do wgpu.ComputePipelineRelease(state.pipelines.compute_pipeline)
+	if compute_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(compute_bind_group_layout)
+	if state.pipelines.rasterize_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.rasterize_bind_group)
+	if state.pipelines.rasterize_pipeline != nil do wgpu.RenderPipelineRelease(state.pipelines.rasterize_pipeline)
+	if rasterize_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(rasterize_bind_group_layout)
 }
