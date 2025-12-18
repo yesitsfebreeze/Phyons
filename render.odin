@@ -17,6 +17,8 @@ ensure_depth_texture :: proc() -> bool {
 	// Release old resources
 	if state.rendering.depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.depth_texture_view)
 	if state.rendering.depth_texture != nil do wgpu.TextureRelease(state.rendering.depth_texture)
+	if state.rendering.custom_depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.custom_depth_texture_view)
+	if state.rendering.custom_depth_texture != nil do wgpu.TextureRelease(state.rendering.custom_depth_texture)
 
 	state.rendering.depth_width = width
 	state.rendering.depth_height = height
@@ -47,6 +49,41 @@ ensure_depth_texture :: proc() -> bool {
 		state.rendering.depth_texture,
 		&depth_view_desc,
 	)
+
+	// Custom depth texture (R32Float for storage)
+	custom_depth_desc := wgpu.TextureDescriptor {
+		label         = "Custom Depth Texture",
+		size          = {width, height, 1},
+		mipLevelCount = 1,
+		sampleCount   = 1,
+		dimension     = ._2D,
+		format        = .R32Float,
+		usage         = {.StorageBinding, .TextureBinding, .CopySrc},
+	}
+	state.rendering.custom_depth_texture = wgpu.DeviceCreateTexture(
+		state.gapi.device,
+		&custom_depth_desc,
+	)
+	if state.rendering.custom_depth_texture == nil {
+		log_err("Failed to create custom depth texture")
+		return false
+	}
+
+	custom_depth_view_desc := wgpu.TextureViewDescriptor {
+		format          = .R32Float,
+		dimension       = ._2D,
+		mipLevelCount   = 1,
+		arrayLayerCount = 1,
+	}
+	state.rendering.custom_depth_texture_view = wgpu.TextureCreateView(
+		state.rendering.custom_depth_texture,
+		&custom_depth_view_desc,
+	)
+
+	// Recreate bind group since texture view changed (only if pipeline exists)
+	if state.pipelines.geometry_pipeline != nil {
+		recreate_geometry_bind_group()
+	}
 
 	return true
 }
@@ -84,9 +121,11 @@ render_frame :: proc() {
 	view_proj := proj * view_matrix
 
 	uniforms := Uniforms {
-		view_proj = view_proj,
-		model     = model,
-		time      = state.elapsed,
+		view_proj     = view_proj,
+		model         = model,
+		time          = state.elapsed,
+		screen_width  = f32(state.gapi.surface_config.width),
+		screen_height = f32(state.gapi.surface_config.height),
 	}
 	wgpu.QueueWriteBuffer(
 		state.gapi.queue,
@@ -112,7 +151,7 @@ render_frame :: proc() {
 			depthSlice = wgpu.DEPTH_SLICE_UNDEFINED,
 			loadOp     = .Clear,
 			storeOp    = .Store,
-			clearValue = {0.1, 0.1, 0.1, 1.0},
+			clearValue = {0.0, 0.0, 0.0, 1.0},
 		}
 
 		depth_attachment := wgpu.RenderPassDepthStencilAttachment {
@@ -164,6 +203,8 @@ render_frame :: proc() {
 }
 
 cleanup_rendering :: proc() {
+	if state.rendering.custom_depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.custom_depth_texture_view)
+	if state.rendering.custom_depth_texture != nil do wgpu.TextureRelease(state.rendering.custom_depth_texture)
 	if state.rendering.depth_texture_view != nil do wgpu.TextureViewRelease(state.rendering.depth_texture_view)
 	if state.rendering.depth_texture != nil do wgpu.TextureRelease(state.rendering.depth_texture)
 }

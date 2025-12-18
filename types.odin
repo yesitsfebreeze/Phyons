@@ -28,11 +28,14 @@ BuffersState :: struct {
 
 RenderingState :: struct {
 	// Depth texture
-	depth_texture:      wgpu.Texture,
-	depth_texture_view: wgpu.TextureView,
+	depth_texture:             wgpu.Texture,
+	depth_texture_view:        wgpu.TextureView,
+	// Custom depth buffer (for volume rendering)
+	custom_depth_texture:      wgpu.Texture,
+	custom_depth_texture_view: wgpu.TextureView,
 	// Dimensions
-	depth_width:        u32,
-	depth_height:       u32,
+	depth_width:               u32,
+	depth_height:              u32,
 }
 
 PipelinesState :: struct {
@@ -64,8 +67,10 @@ State :: struct {
 
 
 Uniforms :: struct #align (16) {
-	view_proj: mat4,
-	model:     mat4,
-	time:      f32,
-	_pad:      [3]f32,
+	view_proj:     mat4,
+	model:         mat4,
+	time:          f32,
+	screen_width:  f32,
+	screen_height: f32,
+	_pad:          f32,
 }

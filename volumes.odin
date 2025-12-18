@@ -92,11 +92,9 @@ make_shape_from_positions :: proc(positions: []vec3, indices: []u32) -> ShapeId 
 
 	for i := 0; i < len(positions); i += 1 {
 		pos := positions[i]
-		dist_to_center := length(pos - mesh_centroid)
 		vertices[i] = Phyon {
-			surface = pos,
-			inside  = {0, 0, 0},
-			depth   = dist_to_center,
+			inside    = mesh_centroid,
+			reference = pos - mesh_centroid, // offset from center to surface
 		}
 	}
 
@@ -232,15 +230,15 @@ rebuild_volume_buffers :: proc() -> bool {
 		for v in shape.phyons {
 			new_vert := v
 
-			// Transform surface position
-			pos4 := vec4{v.surface.x, v.surface.y, v.surface.z, 1.0}
-			transformed_pos := vol.transform * pos4
-			new_vert.surface = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
-
-			// Transform inside position
+			// Transform inside position (point - uses full transform)
 			inside4 := vec4{v.inside.x, v.inside.y, v.inside.z, 1.0}
 			transformed_inside := vol.transform * inside4
 			new_vert.inside = {transformed_inside.x, transformed_inside.y, transformed_inside.z}
+
+			// Transform ref vector (direction - no translation, w=0)
+			ref4 := vec4{v.reference.x, v.reference.y, v.reference.z, 0.0}
+			transformed_ref := vol.transform * ref4
+			new_vert.reference = {transformed_ref.x, transformed_ref.y, transformed_ref.z}
 
 			append(&merged_verts, new_vert)
 		}

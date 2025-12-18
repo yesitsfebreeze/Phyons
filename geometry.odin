@@ -6,9 +6,8 @@ import "vendor/tinyobj"
 
 
 Phyon :: struct {
-	inside:  vec3,
-	surface: vec3,
-	depth:   f32,
+	inside:    vec3,
+	reference: vec3,
 }
 
 // Load a shape from an OBJ file using tinyobj
@@ -89,11 +88,9 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 
 	for i := 0; i < num_surfaces; i += 1 {
 		pos := surfaces[i]
-		depth := length(pos - inside)
 		vertices[i] = Phyon {
-			surface = pos,
-			inside  = {0, 0, 0},
-			depth   = depth,
+			inside    = inside, // mesh centroid
+			reference = pos - inside, // offset from center to surface
 		}
 	}
 
