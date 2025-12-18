@@ -17,9 +17,9 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	bind_layout_entry := wgpu.BindGroupLayoutEntry {
-		binding    = 0,
+		binding = 0,
 		visibility = {.Vertex},
-		buffer     = {type = .Uniform},
+		buffer = {type = .Uniform},
 	}
 	bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
 		label      = "Geometry Bind Group Layout",
@@ -63,13 +63,9 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 
 	vertex_attributes := []wgpu.VertexAttribute {
-		{format = .Float32x3, offset = 0, shaderLocation = 0}, // position
-		{format = .Float32x3, offset = 12, shaderLocation = 1}, // color
-		{format = .Float32x3, offset = 24, shaderLocation = 2}, // reference_centroid
-		{format = .Float32x3, offset = 36, shaderLocation = 3}, // normal
-		{format = .Float32, offset = 48, shaderLocation = 4}, // material_id
-		{format = .Float32, offset = 52, shaderLocation = 5}, // opacity
-		{format = .Float32, offset = 56, shaderLocation = 6}, // distance_to_center
+		{format = .Float32x3, offset = 0, shaderLocation = 0}, // inside
+		{format = .Float32x3, offset = 12, shaderLocation = 1}, // surface
+		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
@@ -102,18 +98,18 @@ init_pipeline :: proc() -> bool {
 	}
 
 	pipeline_desc := wgpu.RenderPipelineDescriptor {
-		label  = "Geometry Pipeline",
+		label = "Geometry Pipeline",
 		layout = pipeline_layout,
 		vertex = {
-			module      = geom_vertex_shader,
-			entryPoint  = "vs_main",
+			module = geom_vertex_shader,
+			entryPoint = "vs_main",
 			bufferCount = 1,
-			buffers     = &vertex_buffer_layout,
+			buffers = &vertex_buffer_layout,
 		},
-		fragment     = &fragment_state,
-		primitive    = {topology = .TriangleList, cullMode = .Back, frontFace = .CCW},
+		fragment = &fragment_state,
+		primitive = {topology = .TriangleList, cullMode = .Back, frontFace = .CCW},
 		depthStencil = &depth_stencil,
-		multisample  = {count = 1, mask = ~u32(0)},
+		multisample = {count = 1, mask = ~u32(0)},
 	}
 
 	state.pipelines.geometry_pipeline = wgpu.DeviceCreateRenderPipeline(

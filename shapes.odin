@@ -40,7 +40,7 @@ make_sphere :: proc(radius: f32 = 1.0, num_points: int = 256, color: vec3 = {1, 
 		indices[i * 3 + 2] = u32(i + 1) // Degenerate - makes a line visually
 	}
 
-	return make_shape_from_positions(positions, indices, color)
+	return make_shape_from_positions(positions, indices)
 }
 
 
@@ -98,5 +98,5 @@ make_cube :: proc(size: f32 = 1.0, color: vec3 = {1, 1, 1}) -> ShapeId {
 		0,
 	}
 
-	return make_shape_from_positions(positions, indices, color)
+	return make_shape_from_positions(positions, indices)
 }

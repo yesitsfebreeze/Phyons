@@ -45,37 +45,6 @@ make_shape :: proc(vertices: []Phyon, indices: []u32) -> ShapeId {
 	shape_verts := make([]Phyon, num_verts)
 	copy(shape_verts, vertices)
 
-	// Compute per-vertex normals if not provided
-	vertex_normals := make([]vec3, num_verts)
-	defer delete(vertex_normals)
-
-	// Accumulate face normals to vertices
-	for i := 0; i < len(indices); i += 3 {
-		i0, i1, i2 := int(indices[i]), int(indices[i + 1]), int(indices[i + 2])
-		v0 := vertices[i0].position
-		v1 := vertices[i1].position
-		v2 := vertices[i2].position
-
-		edge1 := v1 - v0
-		edge2 := v2 - v0
-		face_normal := cross(edge1, edge2)
-
-		vertex_normals[i0] += face_normal
-		vertex_normals[i1] += face_normal
-		vertex_normals[i2] += face_normal
-	}
-
-	// Normalize and update vertex normals (only if they were zero)
-	for i := 0; i < num_verts; i += 1 {
-		if length(shape_verts[i].normal) < 0.001 {
-			n := vertex_normals[i]
-			len_sq := dot(n, n)
-			if len_sq > 0.0001 {
-				shape_verts[i].normal = n / sqrt(len_sq)
-			}
-		}
-	}
-
 	// Copy triangle indices
 	tri_indices := make([]u32, len(indices))
 	copy(tri_indices, indices)
@@ -109,11 +78,7 @@ make_shape :: proc(vertices: []Phyon, indices: []u32) -> ShapeId {
 }
 
 // Create a shape from raw positions and indices (convenience function)
-make_shape_from_positions :: proc(
-	positions: []vec3,
-	indices: []u32,
-	color: vec3 = {1, 1, 1},
-) -> ShapeId {
+make_shape_from_positions :: proc(positions: []vec3, indices: []u32) -> ShapeId {
 	// Compute mesh centroid
 	mesh_centroid := vec3{0, 0, 0}
 	for pos in positions {
@@ -129,14 +94,9 @@ make_shape_from_positions :: proc(
 		pos := positions[i]
 		dist_to_center := length(pos - mesh_centroid)
 		vertices[i] = Phyon {
-			position           = pos,
-			color              = color,
-			reference_centroid = {0, 0, 0},
-			normal             = {0, 0, 0}, // Will be computed in make_shape
-			material_id        = 1.0,
-			opacity            = 1.0,
-			distance_to_center = dist_to_center,
-			_pad               = 0.0,
+			surface = pos,
+			inside  = {0, 0, 0},
+			depth   = dist_to_center,
 		}
 	}
 
@@ -272,22 +232,15 @@ rebuild_volume_buffers :: proc() -> bool {
 		for v in shape.phyons {
 			new_vert := v
 
-			// Transform position
-			pos4 := vec4{v.position.x, v.position.y, v.position.z, 1.0}
+			// Transform surface position
+			pos4 := vec4{v.surface.x, v.surface.y, v.surface.z, 1.0}
 			transformed_pos := vol.transform * pos4
-			new_vert.position = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
+			new_vert.surface = {transformed_pos.x, transformed_pos.y, transformed_pos.z}
 
-			// Transform normal (use inverse transpose for correct normal transformation)
-			// For simplicity, assuming uniform scale - just rotate the normal
-			normal4 := vec4{v.normal.x, v.normal.y, v.normal.z, 0.0}
-			transformed_normal := vol.transform * normal4
-			new_vert.normal = normalize(
-				vec3{transformed_normal.x, transformed_normal.y, transformed_normal.z},
-			)
-
-			// Apply volume color and opacity
-			new_vert.color = vol.color * v.color
-			new_vert.opacity = vol.opacity * v.opacity
+			// Transform inside position
+			inside4 := vec4{v.inside.x, v.inside.y, v.inside.z, 1.0}
+			transformed_inside := vol.transform * inside4
+			new_vert.inside = {transformed_inside.x, transformed_inside.y, transformed_inside.z}
 
 			append(&merged_verts, new_vert)
 		}

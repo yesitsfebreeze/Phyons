@@ -6,14 +6,9 @@ import "vendor/tinyobj"
 
 
 Phyon :: struct {
-	position:           vec3,
-	color:              vec3,
-	reference_centroid: vec3,
-	normal:             vec3,
-	material_id:        f32, // Using f32 for alignment, will be cast to u32 in shader
-	opacity:            f32,
-	distance_to_center: f32,
-	_pad:               f32, // Padding to 64 bytes
+	inside:  vec3,
+	surface: vec3,
+	depth:   f32,
 }
 
 // Load a shape from an OBJ file using tinyobj
@@ -43,38 +38,21 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 
 	// Extract positions from tinyobj attrib (3 floats per vertex)
-	num_positions := len(obj.attrib.vertices) / 3
-	if num_positions == 0 {
+	num_surfaces := len(obj.attrib.vertices) / 3
+	if num_surfaces == 0 {
 		log_err("OBJ file has no vertices:", filename)
 		return INVALID_SHAPE_ID
 	}
 
-	// Extract normals (3 floats per normal)
-	num_normals := len(obj.attrib.normals) / 3
-
 	// Build vertex positions array
-	positions := make([]vec3, num_positions)
-	defer delete(positions)
+	surfaces := make([]vec3, num_surfaces)
+	defer delete(surfaces)
 
-	for i := 0; i < num_positions; i += 1 {
-		positions[i] = {
+	for i := 0; i < num_surfaces; i += 1 {
+		surfaces[i] = {
 			obj.attrib.vertices[i * 3 + 0],
 			obj.attrib.vertices[i * 3 + 1],
 			obj.attrib.vertices[i * 3 + 2],
-		}
-	}
-
-	// Build normals array if available
-	normals: []vec3
-	if num_normals > 0 {
-		normals = make([]vec3, num_normals)
-		defer delete(normals)
-		for i := 0; i < num_normals; i += 1 {
-			normals[i] = {
-				obj.attrib.normals[i * 3 + 0],
-				obj.attrib.normals[i * 3 + 1],
-				obj.attrib.normals[i * 3 + 2],
-			}
 		}
 	}
 
@@ -101,37 +79,32 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 
 	// Compute mesh centroid
-	mesh_centroid := vec3{0, 0, 0}
-	for pos in positions {
-		mesh_centroid += pos
-	}
-	mesh_centroid /= f32(len(positions))
+	inside := vec3{0, 0, 0}
+	for s in surfaces do inside += s
+	inside /= f32(len(surfaces))
 
 	// Build vertices with all attributes
-	vertices := make([]Phyon, num_positions)
+	vertices := make([]Phyon, num_surfaces)
 	defer delete(vertices)
 
-	for i := 0; i < num_positions; i += 1 {
-		pos := positions[i]
-		dist_to_center := length(pos - mesh_centroid)
+	for i := 0; i < num_surfaces; i += 1 {
+		pos := surfaces[i]
+		depth := length(pos - inside)
 		vertices[i] = Phyon {
-			position           = pos,
-			color              = color,
-			reference_centroid = {0, 0, 0},
-			normal             = {0, 0, 0}, // Will be computed in make_shape if not set
-			material_id        = 1.0,
-			opacity            = 1.0,
-			distance_to_center = dist_to_center,
-			_pad               = 0.0,
+			surface = pos,
+			inside  = {0, 0, 0},
+			depth   = depth,
 		}
 	}
 
-	// Apply normals from OBJ if available (indexed separately in OBJ format)
-	// Note: OBJ allows different normal indices per face vertex, but we're using
-	// a simpler approach where normals are computed per-vertex in make_shape
-	// For more accurate OBJ normal support, we'd need to expand vertices
-
-	log_info("Loaded OBJ:", filename, "- vertices:", num_positions, "triangles:", len(indices) / 3)
+	log_info(
+		"Loaded OBJ:",
+		filename,
+		"- surface points:",
+		num_surfaces,
+		"faces:",
+		len(indices) / 3,
+	)
 
 	return make_shape(vertices, indices[:])
 }
