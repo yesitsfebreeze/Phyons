@@ -18,7 +18,7 @@ BuffersState :: struct {
 	index_buffer:          wgpu.Buffer,
 	uniform_buffer:        wgpu.Buffer,
 	triangle_index_buffer: wgpu.Buffer,
-	depth_buffer:          wgpu.Buffer,
+	depth_buffer:          wgpu.Buffer, // Software depth for compute shader
 	// Counts
 	index_count:           u32,
 	triangle_index_count:  u32,
@@ -29,27 +29,30 @@ BuffersState :: struct {
 }
 
 RenderingState :: struct {
-	// Depth texture (hardware z-buffer)
-	depth_texture:        wgpu.Texture,
-	depth_texture_view:   wgpu.TextureView,
-	// Face ID texture (R32Uint - stores face index per pixel)
-	face_id_texture:      wgpu.Texture,
-	face_id_texture_view: wgpu.TextureView,
-	// Output texture (RGBA32Float - computed image)
-	output_texture:       wgpu.Texture,
-	output_texture_view:  wgpu.TextureView,
+	// Hardware depth texture (z-buffer for rasterize pass)
+	depth_texture:           wgpu.Texture,
+	depth_texture_view:      wgpu.TextureView,
+	// Inside+depth texture (xyz=inside position, w=phyon depth)
+	inside_depth_texture:      wgpu.Texture,
+	inside_depth_texture_view: wgpu.TextureView,
+	// Normal+material texture (xyz=normal, w=material_id)
+	normal_material_texture:      wgpu.Texture,
+	normal_material_texture_view: wgpu.TextureView,
+	// Output texture (final image from compute pass)
+	output_texture:          wgpu.Texture,
+	output_texture_view:     wgpu.TextureView,
 	// Dimensions
-	depth_width:          u32,
-	depth_height:         u32,
+	depth_width:             u32,
+	depth_height:            u32,
 }
 
 PipelinesState :: struct {
-	// Render pipeline (rasterization pass - writes face IDs)
+	// Rasterize pipeline (outputs inside+depth and normal+material)
 	rasterize_pipeline:   wgpu.RenderPipeline,
 	rasterize_bind_group: wgpu.BindGroup,
-	// Clear pipeline (clears depth buffer and output texture)
+	// Clear compute pipeline
 	clear_pipeline:       wgpu.ComputePipeline,
-	// Drawing pipeline (processes face IDs into final images)
+	// Drawing compute pipeline (reprojects to smooth surface)
 	drawing_pipeline:     wgpu.ComputePipeline,
 	drawing_bind_group:   wgpu.BindGroup,
 	// Present pipeline (renders output texture to screen)

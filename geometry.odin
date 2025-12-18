@@ -5,11 +5,12 @@ import "core:path/filepath"
 import "vendor/tinyobj"
 
 
+// GPU vertex structure - 32 bytes aligned
 Phyon :: struct {
-	position: vec3,
-	normal:   vec3,
-	depth:    f32,
-	opacity:  f32,
+	position: vec3,        // Interior/centroid position (12 bytes)
+	depth:    f32,         // Distance to surface (4 bytes)
+	normal:   vec3,        // Surface normal (12 bytes)
+	opacity:  f32,         // Opacity (4 bytes)
 }
 
 // Assets directory relative to working directory (project root when using odin run .)
@@ -47,18 +48,18 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 
 	// Extract positions from tinyobj attrib (3 floats per vertex)
-	num_surfaces := len(obj.attrib.vertices) / 3
-	if num_surfaces == 0 {
+	num_verts := len(obj.attrib.vertices) / 3
+	if num_verts == 0 {
 		log_err("OBJ file has no vertices:", filename)
 		return INVALID_SHAPE_ID
 	}
 
 	// Build vertex positions array
-	surfaces := make([]vec3, num_surfaces)
-	defer delete(surfaces)
+	positions := make([]vec3, num_verts)
+	defer delete(positions)
 
-	for i := 0; i < num_surfaces; i += 1 {
-		surfaces[i] = {
+	for i := 0; i < num_verts; i += 1 {
+		positions[i] = {
 			obj.attrib.vertices[i * 3 + 0],
 			obj.attrib.vertices[i * 3 + 1],
 			obj.attrib.vertices[i * 3 + 2],
@@ -72,8 +73,8 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 
 	face_idx := 0
 	for f := 0; f < num_faces; f += 1 {
-		num_verts := obj.attrib.face_num_verts[f]
-		for v := 0; v < num_verts; v += 1 {
+		num_face_verts := obj.attrib.face_num_verts[f]
+		for v := 0; v < num_face_verts; v += 1 {
 			vi := obj.attrib.faces[face_idx]
 			if vi.v_idx != tinyobj.INVALID_INDEX {
 				append(&indices, u32(vi.v_idx))
@@ -88,31 +89,36 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 	}
 
 	// Compute mesh centroid
-	inside := vec3{0, 0, 0}
-	for s in surfaces do inside += s
-	inside /= f32(len(surfaces))
+	centroid := vec3{0, 0, 0}
+	for p in positions {
+		centroid += p
+	}
+	centroid /= f32(num_verts)
 
-	// Build vertices with all attributes
-	vertices := make([]Phyon, num_surfaces)
+	// Build vertices with phyon attributes
+	vertices := make([]Phyon, num_verts)
 	defer delete(vertices)
 
-	for i := 0; i < num_surfaces; i += 1 {
-		pos := surfaces[i]
-		surface := pos - inside
+	for i := 0; i < num_verts; i += 1 {
+		pos := positions[i]
+		surface := pos - centroid
+
 		vertices[i] = Phyon {
-			position = inside,
+			position = centroid,
 			normal   = normalize(surface),
 			depth    = length(surface),
+			opacity  = 1.0,
 		}
 	}
 
+	num_tris := len(indices) / 3
 	log_info(
 		"Loaded OBJ:",
 		filename,
-		"- surface points:",
-		num_surfaces,
+		"- vertices:",
+		num_verts,
 		"faces:",
-		len(indices) / 3,
+		num_tris,
 	)
 
 	free_all(context.temp_allocator)

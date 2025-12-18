@@ -19,63 +19,6 @@ init_buffers :: proc() -> bool {
 	return true
 }
 
-// Create or resize  depth buffer for compute shader depth testing
-ensure_depth_buffer :: proc(width: u32, height: u32) -> bool {
-	required_size := u64(width * height * size_of(u32))
-
-	// Check if buffer exists and is correct size
-	if state.buffers.depth_buffer != nil {
-		current_size := wgpu.BufferGetSize(state.buffers.depth_buffer)
-		if current_size == required_size {
-			return true
-		}
-		// Release old buffer if size changed
-		wgpu.BufferRelease(state.buffers.depth_buffer)
-		state.buffers.depth_buffer = nil
-	}
-
-	// Create new buffer
-	buffer_desc := wgpu.BufferDescriptor {
-		label            = "Depth Buffer",
-		size             = required_size,
-		usage            = {.Storage, .CopyDst},
-		mappedAtCreation = false,
-	}
-	state.buffers.depth_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &buffer_desc)
-	if state.buffers.depth_buffer == nil {
-		log_err("Failed to create depth buffer")
-		return false
-	}
-
-	return true
-}
-
-// Clear depth buffer to max depth (0xFFFFFFFF = farthest)
-clear_depth_buffer :: proc() {
-	if state.buffers.depth_buffer == nil {
-		return
-	}
-
-	buffer_size := wgpu.BufferGetSize(state.buffers.depth_buffer)
-	pixel_count := buffer_size / size_of(u32)
-
-	// Create temporary array filled with max u32
-	clear_data := make([]u32, pixel_count)
-	defer delete(clear_data)
-
-	for i in 0 ..< pixel_count {
-		clear_data[i] = 0xFFFFFFFF
-	}
-
-	wgpu.QueueWriteBuffer(
-		state.gapi.queue,
-		state.buffers.depth_buffer,
-		0,
-		raw_data(clear_data),
-		uint(buffer_size),
-	)
-}
-
 // Create vertex buffer with given vertices
 create_vertex_buffer :: proc(vertices: []Phyon) -> bool {
 	if state.buffers.phyon_buffer != nil {
@@ -217,4 +160,28 @@ cleanup_buffers :: proc() {
 	if state.buffers.uniform_buffer != nil {
 		wgpu.BufferRelease(state.buffers.uniform_buffer)
 	}
+}
+
+// Create or resize software depth buffer for compute shader
+create_depth_buffer :: proc(width: u32, height: u32) -> bool {
+	if state.buffers.depth_buffer != nil {
+		wgpu.BufferRelease(state.buffers.depth_buffer)
+	}
+
+	// One u32 per pixel for atomic depth testing
+	buffer_size := u64(width * height * size_of(u32))
+
+	depth_buffer_desc := wgpu.BufferDescriptor {
+		label            = "Software Depth Buffer",
+		size             = buffer_size,
+		usage            = {.Storage, .CopyDst},
+		mappedAtCreation = false,
+	}
+	state.buffers.depth_buffer = wgpu.DeviceCreateBuffer(state.gapi.device, &depth_buffer_desc)
+	if state.buffers.depth_buffer == nil {
+		log_err("Failed to create software depth buffer")
+		return false
+	}
+
+	return true
 }

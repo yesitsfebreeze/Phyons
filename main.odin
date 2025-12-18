@@ -59,9 +59,10 @@ init :: proc() -> bool {
 		return false
 	}
 
-	// Ensure depth textures are created before pipeline (for bind groups)
-	if !ensure_depth_texture() {
-		log_err("Failed to initialize depth textures")
+	// Ensure render textures are created before pipeline (for bind groups)
+	ok, _ := ensure_render_textures()
+	if !ok {
+		log_err("Failed to initialize render textures")
 		return false
 	}
 

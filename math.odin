@@ -28,6 +28,8 @@ to_degrees :: math.to_degrees
 cos :: math.cos
 sin :: math.sin
 sqrt :: math.sqrt
+atan2 :: math.atan2
+abs :: math.abs
 
 
 // Manipulations

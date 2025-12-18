@@ -38,7 +38,7 @@ init_pipeline :: proc() -> bool {
 	if !ok do return false
 
 	// ==========================================================================
-	// Create rasterize bind group layout (uniform buffer only - no storage texture)
+	// Create rasterize bind group layout (uniform buffer only)
 	// ==========================================================================
 
 	rasterize_bind_layout_entries := [1]wgpu.BindGroupLayoutEntry {
@@ -55,11 +55,11 @@ init_pipeline :: proc() -> bool {
 	)
 
 	// ==========================================================================
-	// Create pipeline layout
+	// Create rasterize pipeline layout
 	// ==========================================================================
 
 	pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
-		label                = "Geometry Pipeline Layout",
+		label                = "Rasterize Pipeline Layout",
 		bindGroupLayoutCount = 1,
 		bindGroupLayouts     = &rasterize_bind_group_layout,
 	}
@@ -67,14 +67,14 @@ init_pipeline :: proc() -> bool {
 	defer wgpu.PipelineLayoutRelease(pipeline_layout)
 
 	// ==========================================================================
-	// Vertex attributes
+	// Vertex attributes for phyons (32 bytes)
 	// ==========================================================================
 
 	vertex_attributes := []wgpu.VertexAttribute {
-		{format = .Float32x3, offset = 0, shaderLocation = 0}, // position
-		{format = .Float32x3, offset = 12, shaderLocation = 1}, // normal
-		{format = .Float32, offset = 24, shaderLocation = 2}, // depth
-		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity
+		{format = .Float32x3, offset = 0, shaderLocation = 0}, // position (vec3)
+		{format = .Float32, offset = 12, shaderLocation = 1}, // depth (f32)
+		{format = .Float32x3, offset = 16, shaderLocation = 2}, // normal (vec3)
+		{format = .Float32, offset = 28, shaderLocation = 3}, // opacity (f32)
 	}
 
 	vertex_buffer_layout := wgpu.VertexBufferLayout {
@@ -85,19 +85,19 @@ init_pipeline :: proc() -> bool {
 	}
 
 	// ==========================================================================
-	// Create Rasterize Pipeline
+	// Create Rasterize Pipeline (outputs inside+depth and normal+material)
 	// ==========================================================================
 
-	color_target := wgpu.ColorTargetState {
-		format    = .RGBA32Float, // Output barycentric (RGB) + triangle ID (A)
-		writeMask = wgpu.ColorWriteMaskFlags_All,
+	color_targets := [2]wgpu.ColorTargetState {
+		{format = .RGBA32Float, writeMask = wgpu.ColorWriteMaskFlags_All}, // inside+depth
+		{format = .RGBA32Float, writeMask = wgpu.ColorWriteMaskFlags_All}, // normal+material
 	}
 
 	fragment_state := wgpu.FragmentState {
 		module      = rasterize_fragment_shader,
 		entryPoint  = "fs_main",
-		targetCount = 1,
-		targets     = &color_target,
+		targetCount = 2,
+		targets     = &color_targets[0],
 	}
 
 	depth_stencil := wgpu.DepthStencilState {
@@ -131,29 +131,32 @@ init_pipeline :: proc() -> bool {
 	}
 
 	// ==========================================================================
-	// Create Drawing Bind Group Layout
+	// Create Drawing Bind Group Layout (compute shader)
 	// ==========================================================================
-	drawing_bind_entries := [6]wgpu.BindGroupLayoutEntry {
+
+	drawing_bind_entries := [5]wgpu.BindGroupLayoutEntry {
 		// Uniforms
 		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
-		// Face ID texture (read) - RGBA32Float with face ID
+		// Inside+depth texture (read)
 		{
 			binding = 1,
 			visibility = {.Compute},
 			texture = {sampleType = .UnfilterableFloat, viewDimension = ._2D},
 		},
-		// Phyon buffer (read)
-		{binding = 2, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
-		// Triangle indices buffer (read) - defines triangle connectivity
-		{binding = 3, visibility = {.Compute}, buffer = {type = .ReadOnlyStorage}},
+		// Normal+material texture (read)
+		{
+			binding = 2,
+			visibility = {.Compute},
+			texture = {sampleType = .UnfilterableFloat, viewDimension = ._2D},
+		},
 		// Output texture (write)
 		{
-			binding = 4,
+			binding = 3,
 			visibility = {.Compute},
 			storageTexture = {access = .WriteOnly, format = .RGBA32Float, viewDimension = ._2D},
 		},
-		// depth buffer (read/write atomic)
-		{binding = 5, visibility = {.Compute}, buffer = {type = .Storage}},
+		// Depth buffer (read/write atomic)
+		{binding = 4, visibility = {.Compute}, buffer = {type = .Storage}},
 	}
 	drawing_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
 		label      = "Drawing Bind Group Layout",
@@ -168,6 +171,7 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Drawing Pipeline Layout
 	// ==========================================================================
+
 	drawing_pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
 		label                = "Drawing Pipeline Layout",
 		bindGroupLayoutCount = 1,
@@ -182,9 +186,10 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Clear Pipeline (uses same layout as drawing)
 	// ==========================================================================
+
 	clear_desc := wgpu.ComputePipelineDescriptor {
-		label = "Clear Compute Pipeline",
-		layout = drawing_pipeline_layout,
+		label   = "Clear Compute Pipeline",
+		layout  = drawing_pipeline_layout,
 		compute = {module = drawing_shader, entryPoint = "cs_clear"},
 	}
 	state.pipelines.clear_pipeline = wgpu.DeviceCreateComputePipeline(
@@ -199,9 +204,10 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Drawing Pipeline
 	// ==========================================================================
+
 	drawing_desc := wgpu.ComputePipelineDescriptor {
-		label = "Drawing Compute Pipeline",
-		layout = drawing_pipeline_layout,
+		label   = "Drawing Compute Pipeline",
+		layout  = drawing_pipeline_layout,
 		compute = {module = drawing_shader, entryPoint = "cs_main"},
 	}
 	state.pipelines.drawing_pipeline = wgpu.DeviceCreateComputePipeline(
@@ -216,14 +222,15 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Present Bind Group Layout
 	// ==========================================================================
+
 	present_bind_entries := [2]wgpu.BindGroupLayoutEntry {
-		// Output texture (read) - RGBA32Float is not filterable
+		// Output texture (read)
 		{
 			binding = 0,
 			visibility = {.Fragment},
 			texture = {sampleType = .UnfilterableFloat, viewDimension = ._2D},
 		},
-		// Sampler - non-filtering for RGBA32Float
+		// Sampler
 		{binding = 1, visibility = {.Fragment}, sampler = {type = .NonFiltering}},
 	}
 	present_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
@@ -239,6 +246,7 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Present Pipeline Layout
 	// ==========================================================================
+
 	present_pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
 		label                = "Present Pipeline Layout",
 		bindGroupLayoutCount = 1,
@@ -253,6 +261,7 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Present Pipeline
 	// ==========================================================================
+
 	present_color_target := wgpu.ColorTargetState {
 		format    = state.gapi.surface_config.format,
 		writeMask = wgpu.ColorWriteMaskFlags_All,
@@ -266,10 +275,10 @@ init_pipeline :: proc() -> bool {
 	}
 
 	present_pipeline_desc := wgpu.RenderPipelineDescriptor {
-		label = "Present Pipeline",
-		layout = present_pipeline_layout,
-		vertex = {module = present_vertex_shader, entryPoint = "vs_main"},
-		fragment = &present_fragment,
+		label     = "Present Pipeline",
+		layout    = present_pipeline_layout,
+		vertex    = {module = present_vertex_shader, entryPoint = "vs_main"},
+		fragment  = &present_fragment,
 		primitive = {topology = .TriangleList},
 		multisample = {count = 1, mask = ~u32(0)},
 	}
@@ -290,6 +299,7 @@ init_pipeline :: proc() -> bool {
 		return false
 	}
 
+	// Create drawing and present bind groups (textures should exist at this point)
 	recreate_drawing_bind_group()
 	if state.pipelines.drawing_bind_group == nil {
 		log_err("Failed to create drawing bind group")
@@ -305,9 +315,8 @@ init_pipeline :: proc() -> bool {
 	return true
 }
 
-// Recreate rasterize bind group (on resize)
+// Recreate rasterize bind group
 recreate_rasterize_bind_group :: proc() {
-	// Release old bind group
 	if state.pipelines.rasterize_bind_group != nil {
 		wgpu.BindGroupRelease(state.pipelines.rasterize_bind_group)
 		state.pipelines.rasterize_bind_group = nil
@@ -328,30 +337,27 @@ recreate_rasterize_bind_group :: proc() {
 	)
 }
 
-// Recreate drawing bind group (on resize)
+// Recreate drawing bind group (on resize or buffer change)
 recreate_drawing_bind_group :: proc() {
-	// Release old bind group
 	if state.pipelines.drawing_bind_group != nil {
 		wgpu.BindGroupRelease(state.pipelines.drawing_bind_group)
 		state.pipelines.drawing_bind_group = nil
 	}
 
 	// Need all textures and buffers to exist
-	if state.rendering.face_id_texture_view == nil ||
+	if state.rendering.inside_depth_texture_view == nil ||
+	   state.rendering.normal_material_texture_view == nil ||
 	   state.rendering.output_texture_view == nil ||
-	   state.buffers.phyon_buffer == nil ||
-	   state.buffers.triangle_index_buffer == nil ||
 	   state.buffers.depth_buffer == nil {
 		return
 	}
 
-	bind_entries := [6]wgpu.BindGroupEntry {
+	bind_entries := [5]wgpu.BindGroupEntry {
 		{binding = 0, buffer = state.buffers.uniform_buffer, size = size_of(Uniforms)},
-		{binding = 1, textureView = state.rendering.face_id_texture_view},
-		{binding = 2, buffer = state.buffers.phyon_buffer, size = wgpu.WHOLE_SIZE},
-		{binding = 3, buffer = state.buffers.triangle_index_buffer, size = wgpu.WHOLE_SIZE},
-		{binding = 4, textureView = state.rendering.output_texture_view},
-		{binding = 5, buffer = state.buffers.depth_buffer, size = wgpu.WHOLE_SIZE},
+		{binding = 1, textureView = state.rendering.inside_depth_texture_view},
+		{binding = 2, textureView = state.rendering.normal_material_texture_view},
+		{binding = 3, textureView = state.rendering.output_texture_view},
+		{binding = 4, buffer = state.buffers.depth_buffer, size = wgpu.WHOLE_SIZE},
 	}
 	bind_desc := wgpu.BindGroupDescriptor {
 		label      = "Drawing Bind Group",
@@ -364,18 +370,16 @@ recreate_drawing_bind_group :: proc() {
 
 // Recreate present bind group (on resize)
 recreate_present_bind_group :: proc() {
-	// Release old bind group
 	if state.pipelines.present_bind_group != nil {
 		wgpu.BindGroupRelease(state.pipelines.present_bind_group)
 		state.pipelines.present_bind_group = nil
 	}
 
-	// Need output texture to exist
 	if state.rendering.output_texture_view == nil {
 		return
 	}
 
-	// Create sampler for texture sampling (non-filtering for RGBA32Float)
+	// Create sampler for texture sampling
 	sampler_desc := wgpu.SamplerDescriptor {
 		addressModeU  = .ClampToEdge,
 		addressModeV  = .ClampToEdge,
@@ -387,7 +391,6 @@ recreate_present_bind_group :: proc() {
 	}
 	sampler := wgpu.DeviceCreateSampler(state.gapi.device, &sampler_desc)
 
-	// Use output_texture from compute pass
 	bind_entries := [2]wgpu.BindGroupEntry {
 		{binding = 0, textureView = state.rendering.output_texture_view},
 		{binding = 1, sampler = sampler},
