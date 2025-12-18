@@ -8,12 +8,12 @@ init_pipeline :: proc() -> bool {
 	// Get shader modules from shaders state
 	// ==========================================================================
 
-	geom_vertex_shader := get_shader("geo_vs")
-	geom_fragment_shader := get_shader("geo_fs")
-	shade_vertex_shader := get_shader("shading_vs")
-	shade_fragment_shader := get_shader("shading_fs")
-	wire_vertex_shader := get_shader("wireframe_vs")
-	wire_fragment_shader := get_shader("present_fs")
+	geom_vertex_shader := get_shader("geo.vs")
+	geom_fragment_shader := get_shader("geo.fs")
+	shade_vertex_shader := get_shader("shading.vs")
+	shade_fragment_shader := get_shader("shading.fs")
+	wire_vertex_shader := get_shader("wireframe.vs")
+	wire_fragment_shader := get_shader("present.fs")
 
 	if geom_vertex_shader == nil ||
 	   geom_fragment_shader == nil ||
@@ -119,10 +119,7 @@ init_pipeline :: proc() -> bool {
 		mipmapFilter  = .Nearest,
 		maxAnisotropy = 1,
 	}
-	state.pipelines.gbuffer_sampler = wgpu.DeviceCreateSampler(
-		state.gapi.device,
-		&sampler_desc,
-	)
+	state.pipelines.gbuffer_sampler = wgpu.DeviceCreateSampler(state.gapi.device, &sampler_desc)
 
 	// ==========================================================================
 	// Create pipeline layouts
@@ -238,11 +235,7 @@ init_pipeline :: proc() -> bool {
 			buffers = &vertex_buffer_layout,
 		},
 		fragment = nil, // Depth-only pass - no fragment shader
-		primitive = {
-			topology = .TriangleList,
-			cullMode = .Front,
-			frontFace = .CCW,
-		},
+		primitive = {topology = .TriangleList, cullMode = .Front, frontFace = .CCW},
 		depthStencil = &geom_back_depth_stencil,
 		multisample = {count = 1, mask = ~u32(0)},
 	}

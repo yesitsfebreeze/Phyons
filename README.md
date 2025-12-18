@@ -63,3 +63,10 @@ Pixels that are already fully opaque naturally stop contributing because later f
 To approximate an SDF-like behavior, capture frontface depth as the “outside” position and, when needed, backface depth as the “interior” position in a second pass; this gives a view-ray interval per object that can be used at shading time for subtraction, thickness, or interior effects.
 
 The final framebuffer is reconstructed in a later pass by shading from the stored per-pixel attributes rather than direct fragment output, effectively misusing the vertex/fragment stages as an interpolation and visibility system instead of a traditional immediate shading pipeline.
+
+
+
+
+
+Steps: 
+display evaluated depth buffer

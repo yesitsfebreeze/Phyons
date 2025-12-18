@@ -12,23 +12,20 @@ ShadersState :: struct {
 SHADER_EXTENSION: string : ".wgsl"
 
 // Shader file definitions
-SHADER_FILES :: [?]struct {
-	name: string,
-	path: string,
-} {
-	{"geo_vs", "geo.vs"},
-	{"geo_fs", "geo.fs"},
-	{"shading_vs", "shading.vs"},
-	{"shading_fs", "shading.fs"},
-	{"wireframe_vs", "wireframe.vs"},
-	{"present_fs", "present.vs"}, // This appears to be the wireframe fragment shader
+SHADER_FILES: []string = {
+	"geo.vs",
+	"geo.fs",
+	"shading.vs",
+	"shading.fs",
+	"wireframe.vs",
+	"present.vs", // This appears to be the wireframe fragment shader
 }
 
 init_shaders :: proc() -> bool {
 	state.shaders.modules = make(map[string]wgpu.ShaderModule)
 
-	for shader_info in SHADER_FILES {
-		path := strings.join({shader_info.path, SHADER_EXTENSION}, "")
+	for name in SHADER_FILES {
+		path := strings.join({name, SHADER_EXTENSION}, "")
 		// Read shader file
 		data, ok := os.read_entire_file(path)
 		if !ok {
@@ -43,18 +40,18 @@ init_shaders :: proc() -> bool {
 			code = string(data),
 		}
 		desc := wgpu.ShaderModuleDescriptor {
-			label       = shader_info.name,
+			label       = name,
 			nextInChain = cast(^wgpu.ChainedStruct)&source,
 		}
 
 		module := wgpu.DeviceCreateShaderModule(state.gapi.device, &desc)
 		if module == nil {
-			fmt.println("Failed to create shader module:", shader_info.name)
+			fmt.println("Failed to create shader module:", name)
 			return false
 		}
 
-		state.shaders.modules[shader_info.name] = module
-		fmt.println("Loaded shader:", shader_info.name)
+		state.shaders.modules[name] = module
+		fmt.println("Loaded shader:", name)
 	}
 
 	return true
@@ -70,7 +67,7 @@ get_shader :: proc(name: string) -> wgpu.ShaderModule {
 }
 
 cleanup_shaders :: proc() {
-	for name, module in state.shaders.modules {
+	for _, module in state.shaders.modules {
 		if module != nil {
 			wgpu.ShaderModuleRelease(module)
 		}

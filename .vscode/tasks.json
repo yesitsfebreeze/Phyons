@@ -8,6 +8,29 @@
 			"args": [
 				"build",
 				".",
+				"-strict-style", // Enforce strict style guideline
+				"-vet", // Run static analysis (finds unused vars, dead code, etc.
+				"-warnings-as-errors", // Treat warnings as errors to keep code clea
+			],
+			"options": {
+				"cwd": "${workspaceRoot}"
+			},
+			"problemMatcher": [],
+		},
+		{
+			"label": "release",
+			"type": "shell",
+			"command": "odin",
+			"args": [
+				"build",
+				".",
+				"-strict-style", // Enforce strict style guideline
+				"-vet", // Run static analysis (finds unused vars, dead code, etc.
+				"-warnings-as-errors", // Treat warnings as errors to keep code clea
+				"-show-timings", // Show build timing informatio
+				"-o:size", // Optimize for size
+				"-no-bounds-check", // Remove bounds checking for performance
+				"-disable-assert", // Remove asserts for performance
 			],
 			"options": {
 				"cwd": "${workspaceRoot}"
@@ -21,6 +44,9 @@
 			"args": [
 				"run",
 				".",
+				"-strict-style", // Enforce strict style guideline
+				"-vet", // Run static analysis (finds unused vars, dead code, etc.
+				"-warnings-as-errors", // Treat warnings as errors to keep code clea
 			],
 			"options": {
 				"cwd": "${workspaceRoot}"

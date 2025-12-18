@@ -14,12 +14,6 @@ Vertex :: struct {
 }
 
 init_geometry :: proc() -> bool {
-	// Create a cube shape using the volume manager
-	cube_shape := make_cube_shape(2.0, {1.0, 1.0, 1.0})
-
-	// Add a single cube volume at the origin
-	add_volume(cube_shape)
-
 	// Rebuild buffers to upload geometry to GPU
 	if !rebuild_volume_buffers() {
 		return false
