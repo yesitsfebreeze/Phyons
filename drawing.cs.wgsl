@@ -179,11 +179,11 @@ fn to_screen(point: vec3<f32>) -> vec2<i32> {
 	let world_pos = (uniforms.model * vec4<f32>(point, 1.0)).xyz;
 	let clip_pos = uniforms.view_proj * vec4<f32>(world_pos, 1.0);
 	let ndc_pos = clip_pos.xyz / clip_pos.w;
-	
+
 	// NDC to screen - Y is flipped (screen Y=0 at top, NDC Y=1 at top)
 	let screen_x = (ndc_pos.x * 0.5 + 0.5) * uniforms.screen_width;
 	let screen_y = (1.0 - (ndc_pos.y * 0.5 + 0.5)) * uniforms.screen_height;
-	
+
 	return vec2<i32>(i32(screen_x), i32(screen_y));
 }
 
