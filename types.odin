@@ -18,6 +18,7 @@ BuffersState :: struct {
 	index_buffer:          wgpu.Buffer,
 	uniform_buffer:        wgpu.Buffer,
 	triangle_index_buffer: wgpu.Buffer,
+	depth_buffer:          wgpu.Buffer,
 	// Counts
 	index_count:           u32,
 	triangle_index_count:  u32,

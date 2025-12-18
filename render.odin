@@ -106,6 +106,12 @@ ensure_depth_texture :: proc() -> bool {
 		&output_view_desc,
 	)
 
+	// Create/resize depth buffer
+	if !ensure_depth_buffer(width, height) {
+		log_err("Failed to create depth buffer")
+		return false
+	}
+
 	// Recreate bind groups since texture views changed (only if pipelines exist)
 	if state.pipelines.rasterize_pipeline != nil {
 		recreate_rasterize_bind_group()
@@ -235,6 +241,9 @@ render_frame :: proc() {
 	// Pass 2: Drawing Pass - Process face IDs into image
 	// ==========================================================================
 	{
+		// Clear  depth buffer to max depth (must be done before compute pass)
+		clear_depth_buffer()
+
 		pass := wgpu.CommandEncoderBeginComputePass(encoder, nil)
 
 		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.drawing_pipeline)

@@ -134,7 +134,7 @@ init_pipeline :: proc() -> bool {
 	// ==========================================================================
 	// Create Drawing Bind Group Layout
 	// ==========================================================================
-	drawing_bind_entries := [5]wgpu.BindGroupLayoutEntry {
+	drawing_bind_entries := [6]wgpu.BindGroupLayoutEntry {
 		// Uniforms
 		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
 		// Face ID texture (read) - RGBA32Float with face ID
@@ -153,6 +153,8 @@ init_pipeline :: proc() -> bool {
 			visibility = {.Compute},
 			storageTexture = {access = .WriteOnly, format = .RGBA32Float, viewDimension = ._2D},
 		},
+		// depth buffer (read/write atomic)
+		{binding = 5, visibility = {.Compute}, buffer = {type = .Storage}},
 	}
 	drawing_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
 		label      = "Drawing Bind Group Layout",
@@ -322,16 +324,18 @@ recreate_drawing_bind_group :: proc() {
 	if state.rendering.face_id_texture_view == nil ||
 	   state.rendering.output_texture_view == nil ||
 	   state.buffers.phyon_buffer == nil ||
-	   state.buffers.triangle_index_buffer == nil {
+	   state.buffers.triangle_index_buffer == nil ||
+	   state.buffers.depth_buffer == nil {
 		return
 	}
 
-	bind_entries := [5]wgpu.BindGroupEntry {
+	bind_entries := [6]wgpu.BindGroupEntry {
 		{binding = 0, buffer = state.buffers.uniform_buffer, size = size_of(Uniforms)},
 		{binding = 1, textureView = state.rendering.face_id_texture_view},
 		{binding = 2, buffer = state.buffers.phyon_buffer, size = wgpu.WHOLE_SIZE},
 		{binding = 3, buffer = state.buffers.triangle_index_buffer, size = wgpu.WHOLE_SIZE},
 		{binding = 4, textureView = state.rendering.output_texture_view},
+		{binding = 5, buffer = state.buffers.depth_buffer, size = wgpu.WHOLE_SIZE},
 	}
 	bind_desc := wgpu.BindGroupDescriptor {
 		label      = "Drawing Bind Group",
