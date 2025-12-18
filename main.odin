@@ -1,41 +1,40 @@
 package phyons
 
-import "core:fmt"
 import "vendor:glfw"
 
 main :: proc() {
+	init_logging()
+	defer cleanup_logging()
+
 	if !init() {
-		fmt.println("Failed to initialize")
+		log_err("Failed to initialize")
 		return
 	}
 	defer cleanup()
 
-	fmt.println("Starting render loop...")
+	log_info("Starting render loop...")
 
-	// Initialize timing
 	state.last_time = glfw.GetTime()
-
-	// Main loop
 	for !glfw.WindowShouldClose(state.window) {
 		loop()
 	}
 
-	fmt.println("Shutting down...")
+	log_info("Shutting down...")
 }
 
 init :: proc() -> bool {
 	if !init_window() {
-		fmt.println("Failed to initialize window")
+		log_err("Failed to initialize window")
 		return false
 	}
 
 	if !init_wgpu() {
-		fmt.println("Failed to initialize WebGPU")
+		log_err("Failed to initialize WebGPU")
 		return false
 	}
 
 	if !init_shaders() {
-		fmt.println("Failed to load shaders")
+		log_err("Failed to load shaders")
 		return false
 	}
 
@@ -43,17 +42,17 @@ init :: proc() -> bool {
 	init_volume_manager()
 
 	if !init_buffers() {
-		fmt.println("Failed to initialize buffers")
+		log_err("Failed to initialize buffers")
 		return false
 	}
 
 	if !init_geometry() {
-		fmt.println("Failed to initialize geometry")
+		log_err("Failed to initialize geometry")
 		return false
 	}
 
 	if !init_pipeline() {
-		fmt.println("Failed to create pipeline")
+		log_err("Failed to create pipeline")
 		return false
 	}
 
