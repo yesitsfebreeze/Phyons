@@ -71,7 +71,7 @@ multi_logger: log.Logger
 @(private = "file")
 log_file_handle: os.Handle = os.INVALID_HANDLE
 
-init_logging :: proc() {
+init_logging :: proc() -> log.Logger {
 	// Create console logger
 	console_logger = log.create_console_logger()
 
@@ -81,16 +81,20 @@ init_logging :: proc() {
 		file_logger = log.create_file_logger(log_file_handle)
 		// Create multi-logger combining both
 		multi_logger = log.create_multi_logger(console_logger, file_logger)
-		context.logger = multi_logger
+		return multi_logger
 	} else {
 		// Fall back to console only if file creation fails
-		context.logger = console_logger
+		return console_logger
 	}
+}
 
+init_tracking_allocator :: proc() -> mem.Allocator {
 	when USE_TRACKING_ALLOCATOR {
 		default_allocator := context.allocator
 		mem.tracking_allocator_init(&tracking_allocator, default_allocator)
-		context.allocator = mem.tracking_allocator(&tracking_allocator)
+		return mem.tracking_allocator(&tracking_allocator)
+	} else {
+		return context.allocator
 	}
 }
 
@@ -108,7 +112,11 @@ cleanup_logging :: proc() {
 				logf_err("- %p @ %v", entry.memory, entry.location)
 			}
 		}
+		// Get the backing allocator before destroying
+		backing := tracking_allocator.backing
 		mem.tracking_allocator_destroy(&tracking_allocator)
+		// Restore default allocator for logger cleanup
+		context.allocator = backing
 	}
 
 	// Destroy multi-logger if file was opened

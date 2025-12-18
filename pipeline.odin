@@ -18,14 +18,14 @@ compute_shader: wgpu.ShaderModule
 
 init_pipeline :: proc() -> bool {
 	// Get shader modules
+	ok: bool
 
-	err := false
-
-	rasterize_vertex_shader, err = get_shader("rasterize.vs")
-	rasterize_fragment_shader, err = get_shader("rasterize.fs")
-	compute_shader, err = get_shader("depth.cs")
-
-	if err do return false
+	rasterize_vertex_shader, ok = get_shader("rasterize.vs")
+	if !ok do return false
+	rasterize_fragment_shader, ok = get_shader("rasterize.fs")
+	if !ok do return false
+	compute_shader, ok = get_shader("depth.cs")
+	if !ok do return false
 
 	// ==========================================================================
 	// Create rasterize bind group layout (uniform buffer only - no storage texture)

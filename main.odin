@@ -5,7 +5,10 @@ import "vendor:glfw"
 state: State
 
 main :: proc() {
-	init_logging()
+	set_exe_cwd()
+
+	context.logger = init_logging()
+	context.allocator = init_tracking_allocator()
 	defer cleanup_logging()
 
 	if !init() {

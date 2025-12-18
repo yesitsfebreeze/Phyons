@@ -9,6 +9,8 @@ _ :: strings
 
 // Compile-time flag: use -define:EMBED_SHADERS=true for release builds
 EMBED_SHADERS :: #config(EMBED_SHADERS, false)
+// Shader directory relative to executable (bin/)
+DEV_SHADER_DIR :: "../"
 
 ShadersState :: struct {
 	modules: map[string]wgpu.ShaderModule,
@@ -39,6 +41,7 @@ when EMBED_SHADERS {
 	}
 }
 
+
 // Load shader source - from embedded data in release, from file in debug
 when EMBED_SHADERS {
 	load_shader_source :: proc(idx: ShaderIndex) -> (string, bool) {
@@ -49,7 +52,7 @@ when EMBED_SHADERS {
 	load_shader_source :: proc(idx: ShaderIndex) -> (string, bool) {
 		// Debug mode: load from file for hot-reloading during development
 		name := SHADER_NAMES[idx]
-		path := strings.join({name, SHADER_EXTENSION}, "")
+		path := strings.join({DEV_SHADER_DIR, name, SHADER_EXTENSION}, "")
 		defer delete(path)
 		data, ok := os.read_entire_file(path)
 		if !ok {
