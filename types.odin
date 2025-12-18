@@ -33,7 +33,7 @@ RenderingState :: struct {
 	// Face ID texture (R32Uint - stores face index per pixel)
 	face_id_texture:      wgpu.Texture,
 	face_id_texture_view: wgpu.TextureView,
-	// Output texture (RGBA32Float - computed depth/opacity)
+	// Output texture (RGBA32Float - computed image)
 	output_texture:       wgpu.Texture,
 	output_texture_view:  wgpu.TextureView,
 	// Dimensions
@@ -45,10 +45,10 @@ PipelinesState :: struct {
 	// Render pipeline (rasterization pass - writes face IDs)
 	rasterize_pipeline:   wgpu.RenderPipeline,
 	rasterize_bind_group: wgpu.BindGroup,
-	// Compute pipeline (processes face IDs into depth/opacity)
-	compute_pipeline:     wgpu.ComputePipeline,
-	compute_bind_group:   wgpu.BindGroup,
-	// Present pipeline (renders output tjoomexture to screen)
+	// Drawing pipeline (processes face IDs into final images)
+	drawing_pipeline:     wgpu.ComputePipeline,
+	drawing_bind_group:   wgpu.BindGroup,
+	// Present pipeline (renders output texture to screen)
 	present_pipeline:     wgpu.RenderPipeline,
 	present_bind_group:   wgpu.BindGroup,
 }

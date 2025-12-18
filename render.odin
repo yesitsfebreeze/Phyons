@@ -110,8 +110,8 @@ ensure_depth_texture :: proc() -> bool {
 	if state.pipelines.rasterize_pipeline != nil {
 		recreate_rasterize_bind_group()
 	}
-	if state.pipelines.compute_pipeline != nil {
-		recreate_compute_bind_group()
+	if state.pipelines.drawing_pipeline != nil {
+		recreate_drawing_bind_group()
 	}
 	if state.pipelines.present_pipeline != nil {
 		recreate_present_bind_group()
@@ -227,13 +227,13 @@ render_frame :: proc() {
 	}
 
 	// ==========================================================================
-	// Pass 2: Compute Pass - Process face IDs into depth/opacity
+	// Pass 2: Drawing Pass - Process face IDs into image
 	// ==========================================================================
 	{
 		pass := wgpu.CommandEncoderBeginComputePass(encoder, nil)
 
-		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.compute_pipeline)
-		wgpu.ComputePassEncoderSetBindGroup(pass, 0, state.pipelines.compute_bind_group)
+		wgpu.ComputePassEncoderSetPipeline(pass, state.pipelines.drawing_pipeline)
+		wgpu.ComputePassEncoderSetBindGroup(pass, 0, state.pipelines.drawing_bind_group)
 
 		// Dispatch workgroups (8x8 threads per group)
 		width := state.gapi.surface_config.width

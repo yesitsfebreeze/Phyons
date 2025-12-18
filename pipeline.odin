@@ -6,7 +6,7 @@ import "vendor:wgpu"
 @(private = "file")
 rasterize_bind_group_layout: wgpu.BindGroupLayout
 @(private = "file")
-compute_bind_group_layout: wgpu.BindGroupLayout
+drawing_bind_group_layout: wgpu.BindGroupLayout
 @(private = "file")
 present_bind_group_layout: wgpu.BindGroupLayout
 
@@ -16,7 +16,7 @@ rasterize_vertex_shader: wgpu.ShaderModule
 @(private = "file")
 rasterize_fragment_shader: wgpu.ShaderModule
 @(private = "file")
-compute_shader: wgpu.ShaderModule
+drawing_shader: wgpu.ShaderModule
 @(private = "file")
 present_vertex_shader: wgpu.ShaderModule
 @(private = "file")
@@ -30,7 +30,7 @@ init_pipeline :: proc() -> bool {
 	if !ok do return false
 	rasterize_fragment_shader, ok = get_shader("rasterize.fs")
 	if !ok do return false
-	compute_shader, ok = get_shader("depth.cs")
+	drawing_shader, ok = get_shader("drawing.cs")
 	if !ok do return false
 	present_vertex_shader, ok = get_shader("present.vs")
 	if !ok do return false
@@ -131,9 +131,9 @@ init_pipeline :: proc() -> bool {
 	}
 
 	// ==========================================================================
-	// Create Compute Bind Group Layout
+	// Create Drawing Bind Group Layout
 	// ==========================================================================
-	compute_bind_entries := [5]wgpu.BindGroupLayoutEntry {
+	drawing_bind_entries := [5]wgpu.BindGroupLayoutEntry {
 		// Uniforms
 		{binding = 0, visibility = {.Compute}, buffer = {type = .Uniform}},
 		// Face ID texture (read)
@@ -153,44 +153,44 @@ init_pipeline :: proc() -> bool {
 			storageTexture = {access = .WriteOnly, format = .RGBA32Float, viewDimension = ._2D},
 		},
 	}
-	compute_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
-		label      = "Compute Bind Group Layout",
-		entryCount = len(compute_bind_entries),
-		entries    = &compute_bind_entries[0],
+	drawing_bind_layout_desc := wgpu.BindGroupLayoutDescriptor {
+		label      = "Drawing Bind Group Layout",
+		entryCount = len(drawing_bind_entries),
+		entries    = &drawing_bind_entries[0],
 	}
-	compute_bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
+	drawing_bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
 		state.gapi.device,
-		&compute_bind_layout_desc,
+		&drawing_bind_layout_desc,
 	)
 
 	// ==========================================================================
-	// Create Compute Pipeline Layout
+	// Create Drawing Pipeline Layout
 	// ==========================================================================
-	compute_pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
-		label                = "Compute Pipeline Layout",
+	drawing_pipeline_layout_desc := wgpu.PipelineLayoutDescriptor {
+		label                = "Drawing Pipeline Layout",
 		bindGroupLayoutCount = 1,
-		bindGroupLayouts     = &compute_bind_group_layout,
+		bindGroupLayouts     = &drawing_bind_group_layout,
 	}
-	compute_pipeline_layout := wgpu.DeviceCreatePipelineLayout(
+	drawing_pipeline_layout := wgpu.DeviceCreatePipelineLayout(
 		state.gapi.device,
-		&compute_pipeline_layout_desc,
+		&drawing_pipeline_layout_desc,
 	)
-	defer wgpu.PipelineLayoutRelease(compute_pipeline_layout)
+	defer wgpu.PipelineLayoutRelease(drawing_pipeline_layout)
 
 	// ==========================================================================
-	// Create Compute Pipeline
+	// Create Drawing Pipeline
 	// ==========================================================================
-	compute_desc := wgpu.ComputePipelineDescriptor {
-		label = "Depth Compute Pipeline",
-		layout = compute_pipeline_layout,
-		compute = {module = compute_shader, entryPoint = "cs_main"},
+	drawing_desc := wgpu.ComputePipelineDescriptor {
+		label = "Drawing Compute Pipeline",
+		layout = drawing_pipeline_layout,
+		compute = {module = drawing_shader, entryPoint = "cs_main"},
 	}
-	state.pipelines.compute_pipeline = wgpu.DeviceCreateComputePipeline(
+	state.pipelines.drawing_pipeline = wgpu.DeviceCreateComputePipeline(
 		state.gapi.device,
-		&compute_desc,
+		&drawing_desc,
 	)
-	if state.pipelines.compute_pipeline == nil {
-		log_err("Failed to create compute pipeline")
+	if state.pipelines.drawing_pipeline == nil {
+		log_err("Failed to create drawing pipeline")
 		return false
 	}
 
@@ -271,9 +271,9 @@ init_pipeline :: proc() -> bool {
 		return false
 	}
 
-	recreate_compute_bind_group()
-	if state.pipelines.compute_bind_group == nil {
-		log_err("Failed to create compute bind group")
+	recreate_drawing_bind_group()
+	if state.pipelines.drawing_bind_group == nil {
+		log_err("Failed to create drawing bind group")
 		return false
 	}
 
@@ -309,12 +309,12 @@ recreate_rasterize_bind_group :: proc() {
 	)
 }
 
-// Recreate compute bind group (on resize)
-recreate_compute_bind_group :: proc() {
+// Recreate drawing bind group (on resize)
+recreate_drawing_bind_group :: proc() {
 	// Release old bind group
-	if state.pipelines.compute_bind_group != nil {
-		wgpu.BindGroupRelease(state.pipelines.compute_bind_group)
-		state.pipelines.compute_bind_group = nil
+	if state.pipelines.drawing_bind_group != nil {
+		wgpu.BindGroupRelease(state.pipelines.drawing_bind_group)
+		state.pipelines.drawing_bind_group = nil
 	}
 
 	// Need all textures and buffers to exist
@@ -333,12 +333,12 @@ recreate_compute_bind_group :: proc() {
 		{binding = 4, textureView = state.rendering.output_texture_view},
 	}
 	bind_desc := wgpu.BindGroupDescriptor {
-		label      = "Compute Bind Group",
-		layout     = compute_bind_group_layout,
+		label      = "Drawing Bind Group",
+		layout     = drawing_bind_group_layout,
 		entryCount = len(bind_entries),
 		entries    = &bind_entries[0],
 	}
-	state.pipelines.compute_bind_group = wgpu.DeviceCreateBindGroup(state.gapi.device, &bind_desc)
+	state.pipelines.drawing_bind_group = wgpu.DeviceCreateBindGroup(state.gapi.device, &bind_desc)
 }
 
 // Recreate present bind group (on resize)
@@ -383,9 +383,9 @@ cleanup_pipelines :: proc() {
 	if state.pipelines.present_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.present_bind_group)
 	if state.pipelines.present_pipeline != nil do wgpu.RenderPipelineRelease(state.pipelines.present_pipeline)
 	if present_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(present_bind_group_layout)
-	if state.pipelines.compute_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.compute_bind_group)
-	if state.pipelines.compute_pipeline != nil do wgpu.ComputePipelineRelease(state.pipelines.compute_pipeline)
-	if compute_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(compute_bind_group_layout)
+	if state.pipelines.drawing_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.drawing_bind_group)
+	if state.pipelines.drawing_pipeline != nil do wgpu.ComputePipelineRelease(state.pipelines.drawing_pipeline)
+	if drawing_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(drawing_bind_group_layout)
 	if state.pipelines.rasterize_bind_group != nil do wgpu.BindGroupRelease(state.pipelines.rasterize_bind_group)
 	if state.pipelines.rasterize_pipeline != nil do wgpu.RenderPipelineRelease(state.pipelines.rasterize_pipeline)
 	if rasterize_bind_group_layout != nil do wgpu.BindGroupLayoutRelease(rasterize_bind_group_layout)

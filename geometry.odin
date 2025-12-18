@@ -12,11 +12,19 @@ Phyon :: struct {
 	opacity:  f32,
 }
 
+// Assets directory relative to working directory (project root when using odin run .)
+@(private = "file")
+ASSETS_DIR :: "../assets/"
+
 // Load a shape from an OBJ file using tinyobj
 // Returns INVALID_SHAPE_ID on failure
 load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
+
+	rel := relative_path(filename, ASSETS_DIR, context.temp_allocator)
+	path := join_path({ASSETS_DIR, rel}, context.temp_allocator)
+
 	// Read the OBJ file
-	data, ok := os.read_entire_file(filename)
+	data, ok := os.read_entire_file(path)
 	if !ok {
 		log_err("Failed to read OBJ file:", filename)
 		return INVALID_SHAPE_ID
@@ -107,6 +115,7 @@ load_obj_shape :: proc(filename: string, color: vec3 = {1, 1, 1}) -> ShapeId {
 		len(indices) / 3,
 	)
 
+	free_all(context.temp_allocator)
 	return make_shape(vertices, indices[:])
 }
 

@@ -74,32 +74,32 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		return;
 	}
 
-	// Unpack triangle ID and barycentric coordinates
+	// // Unpack triangle ID and barycentric coordinates
 	let triangle_id = tex_data.r;
-	let bary_packed = tex_data.g;
-	let bary_x = unpack_unorm(bary_packed >> 16u);
-	let bary_y = unpack_unorm(bary_packed & 0xFFFFu);
-	let bary_z = 1.0 - bary_x - bary_y;
-	let bary = vec3<f32>(bary_x, bary_y, bary_z);
+	// let bary_packed = tex_data.g;
+	// let bary_x = unpack_unorm(bary_packed >> 16u);
+	// let bary_y = unpack_unorm(bary_packed & 0xFFFFu);
+	// let bary_z = 1.0 - bary_x - bary_y;
+	// let bary = vec3<f32>(bary_x, bary_y, bary_z);
 
-	// Get the three vertices of this triangle
-	let verts = get_triangle_vertices(triangle_id);
+	// // Get the three vertices of this triangle
+	// let verts = get_triangle_vertices(triangle_id);
 
-	// Interpolate normal at hit point
-	let hit_normal = interpolate_normal(verts, bary);
+	// // Interpolate normal at hit point
+	// let hit_normal = interpolate_normal(verts, bary);
 
-	// Interpolate depth at hit point
-	let hit_depth = interpolate_depth(verts, bary);
+	// // Interpolate depth at hit point
+	// let hit_depth = interpolate_depth(verts, bary);
 
-	// Simple lighting using interpolated normal
-	let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
-	let ndotl = max(dot(hit_normal, light_dir), 0.0);
-	let ambient = 0.2;
-	let diffuse = ndotl * 0.8;
+	// // Simple lighting using interpolated normal
+	// let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+	// let ndotl = max(dot(hit_normal, light_dir), 0.0);
+	// let ambient = 0.2;
+	// let diffuse = ndotl * 0.8;
 
-	// Visualize depth with lighting
-	let depth_vis = clamp(hit_depth, 0.0, 1.0);
-	let color = vec3<f32>(depth_vis) * (ambient + diffuse);
+	// // Visualize depth with lighting
+	// let depth_vis = clamp(hit_depth, 0.0, 1.0);
+	// let color = vec3<f32>(depth_vis) * (ambient + diffuse);
 
-	textureStore(output_texture, pixel, vec4<f32>(color, 1.0));
+	textureStore(output_texture, pixel, vec4<f32>(vec3<f32>(f32(triangle_id)), 1.0));
 }
